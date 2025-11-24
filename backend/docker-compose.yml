@@ -4,7 +4,7 @@ services:
     build: .
     ports:
       - "7860:7860"
-    volumes:
+    # volumes:
       # Mount current directory for development (optional, remove for prod simulation)
       # - .:/home/user/app
       # Exclude .venv from volume mount to avoid conflicts with container's venv
