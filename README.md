@@ -20,9 +20,9 @@ The project is divided into two main components:
 
 ```mermaid
 graph TD
-    User[User] -->|Uploads Video| Frontend[Frontend (FastAPI + HTMX)]
-    Frontend -->|Sends Job (Async)| Backend[Backend (Gradio + Docker)]
-    Backend -->|Processes Video| Processing[Processing (Librosa/MoviePy)]
+    User[User] -->|Uploads Video| Frontend["Frontend (FastAPI + HTMX)"]
+    Frontend -->|Sends Job Async| Backend["Backend (Gradio + Docker)"]
+    Backend -->|Processes Video| Processing["Processing (Librosa/MoviePy)"]
     Processing -->|Generates Video| Backend
     Backend -->|Status/Result| Frontend
     Frontend -->|SSE Updates| User
