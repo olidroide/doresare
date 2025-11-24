@@ -1,0 +1,15 @@
+services:
+  backend:
+
+    build: .
+    ports:
+      - "7860:7860"
+    volumes:
+      # Mount current directory for development (optional, remove for prod simulation)
+      # - .:/home/user/app
+      # Exclude .venv from volume mount to avoid conflicts with container's venv
+      # - /home/user/app/.venv
+    environment:
+      - GRADIO_SERVER_NAME=0.0.0.0
+    # Override command for development if needed, e.g. to enable reload
+    # command: uv run uvicorn app:app --host 0.0.0.0 --port 7860 --reload

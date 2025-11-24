@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Ukulele Chord Video Generator</title>
+    <script src="/static/htmx.min.js"></script>
+    <script src="/static/sse.js"></script>
+    <script src="/static/tailwindcss.js"></script>
+    <style>
+        .htmx-indicator {
+            display: none
+        }
+
+        .htmx-request .htmx-indicator {
+            display: block
+        }
+
+        .htmx-request.btn {
+            display: none
+        }
+    </style>
+    <script>
+        // Custom SSE handler for smooth progress updates
+        document.addEventListener('DOMContentLoaded', function () {
+            // Listen for HTMX SSE messages
+            document.body.addEventListener('htmx:sseBeforeMessage', function (event) {
+                try {
+                    // Parse JSON data from SSE
+                    const data = JSON.parse(event.detail.data);
+                    console.log('📥 SSE Data:', data);
+
+                    if (data.type === 'progress') {
+                        // Update progress bar smoothly without replacing DOM
+                        const progressBar = document.getElementById('progress-bar');
+                        const progressValue = document.getElementById('progress-value');
+                        const progressDesc = document.getElementById('progress-desc');
+                        const queuePosition = document.getElementById('queue-position');
+                        const queueSize = document.getElementById('queue-size');
+                        const elapsedTime = document.getElementById('elapsed-time');
+
+                        if (progressBar) progressBar.style.width = data.progress + '%';
+                        if (progressValue) progressValue.textContent = data.progress;
+                        if (progressDesc) progressDesc.textContent = data.progress_desc;
+                        if (queuePosition) queuePosition.textContent = data.position;
+                        if (queueSize) queueSize.textContent = data.queue_size;
+                        if (elapsedTime) elapsedTime.textContent = data.elapsed_time;
+
+                        // Prevent default HTMX swap
+                        event.preventDefault();
+                    } else if (data.type === 'success') {
+                        // Render success template
+                        const resultado = document.getElementById('resultado');
+                        if (resultado) {
+                            resultado.innerHTML = `
+                                <div class="bg-gray-800 p-6 rounded-lg border border-green-500 animate-fade-in">
+                                    <h3 class="text-xl font-bold text-green-400 mb-4 text-center">✨ Video Completed!</h3>
+                                    <video controls class="w-full rounded-lg shadow-lg mb-6 border border-gray-700">
+                                        <source src="/static/${data.output_filename}" type="video/mp4">
+                                        Your browser does not support HTML5 video.
+                                    </video>
+                                    <div class="flex justify-center">
+                                        <a href="/static/${data.output_filename}" download="${data.output_filename}"
+                                            class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-full transition-transform transform hover:scale-105 flex items-center gap-2">
+                                            ⬇️ Download Video
+                                        </a>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                        event.preventDefault();
+                    } else if (data.type === 'error') {
+                        // Render error template
+                        const resultado = document.getElementById('resultado');
+                        if (resultado) {
+                            resultado.innerHTML = `
+                                <div class="bg-red-900 p-6 rounded-lg border border-red-500">
+                                    <h3 class="text-xl font-bold text-red-400 mb-4">❌ Error</h3>
+                                    <p class="text-gray-300">${data.error_message}</p>
+                                </div>
+                            `;
+                        }
+                        event.preventDefault();
+                    }
+                } catch (e) {
+                    console.error('Error parsing SSE JSON:', e);
+                    // Let HTMX handle it as HTML if not valid JSON
+                }
+            });
+        });
+    </script>
+</head>
+
+<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center justify-center p-5">
+    <div class="max-w-2xl w-full bg-gray-800 p-8 rounded-lg shadow-lg">
+        <h1 class="text-3xl font-bold mb-6 text-center text-yellow-400">🎸 Ukulele Chord Video Generator</h1>
+
+        <div class="mb-8 text-gray-300 text-center">
+            <p>Upload your music video and AI will automatically detect the chords.</p>
+            <p class="text-sm mt-2 text-gray-500">Hybrid Processing: AWS (Frontend) + Hugging Face (Backend)</p>
+        </div>
+
+        <form hx-post="/upload" hx-encoding="multipart/form-data" hx-target="#resultado" hx-indicator="#loading"
+            class="space-y-6">
+
+            <div
+                class="flex flex-col items-center justify-center border-2 border-dashed border-gray-600 rounded-lg p-10 hover:border-yellow-400 transition-colors">
+                <input type="file" name="file" accept=".mp4,.mov,.avi" required class="text-gray-300">
+            </div>
+
+            <button
+                class="btn w-full bg-yellow-500 hover:bg-yellow-600 text-black font-bold py-3 px-4 rounded transition-transform transform hover:scale-105"
+                type="submit">
+                🚀 Generate Video with Chords
+            </button>
+        </form>
+
+        <div id="loading" class="htmx-indicator mt-8 text-center">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-400 mx-auto mb-4"></div>
+            <p class="text-yellow-300 font-semibold">Sending to AI...</p>
+            <p class="text-gray-400 text-sm">This may take a few minutes. Please do not close this tab.</p>
+            <p class="text-gray-500 text-xs mt-2">Status: Separating audio, detecting chords and rendering...</p>
+        </div>
+
+        <div id="resultado" class="mt-8"></div>
+    </div>
+</body>
+
+</html>

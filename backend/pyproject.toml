@@ -1,0 +1,34 @@
+[project]
+name = "extractor-notas-backend"
+version = "0.1.0"
+description = "Backend for Extractor de notas y acordes musicales"
+readme = "README.md"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    "fastapi>=0.100.0",
+    "uvicorn>=0.20.0",
+    "gradio>=4.0.0",
+    "librosa>=0.10.0",
+    "numpy>=1.21.0,<3.0",
+    "scipy>=1.7.0",
+    "moviepy>=2.1.1",
+    "pillow>=9.0.0",
+    "audio-separator>=0.18.0",
+    "pychord>=0.6.0",
+    "onnxruntime>=1.16.0",
+    "soundfile>=0.12.0",
+
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-mock>=3.10.0",
+]
