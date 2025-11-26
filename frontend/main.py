@@ -30,7 +30,10 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 jobs = {}
 
 def get_client():
-    if settings.ENV == Environment.LOCAL:
+    if settings.BACKEND_URL:
+        print(f"🔌 Connecting to backend at {settings.BACKEND_URL}")
+        return Client(settings.BACKEND_URL)
+    elif settings.ENV == Environment.LOCAL:
         return Client("http://127.0.0.1:7860")
     else:
         return Client(settings.HF_SPACE, hf_token=settings.HF_TOKEN)
@@ -39,31 +42,42 @@ def get_client():
 async def home(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
+import tempfile
+
 @app.post("/upload")
 async def process(request: Request, file: UploadFile):
-    temp_filename = f"temp_{int(time.time())}_{file.filename}"
-    
     try:
-        # 1. Save upload temporarily
-        with open(temp_filename, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        # 1. Create a named temporary file
+        # delete=False because we need to close it before passing path to gradio_client,
+        # but we will manually delete it immediately after submission.
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file.filename}") as temp_file:
+            shutil.copyfileobj(file.file, temp_file)
+            temp_path = temp_file.name
+            
+        print(f"🚀 Saved temp file to {temp_path}")
             
         # 2. Connect and Submit (Async)
         client = get_client()
-        print(f"🚀 Sending {temp_filename} to backend (Async)...")
+        print(f"🚀 Sending {temp_path} to backend (Async)...")
         
         # Use submit() to not block and get a Job
+        # The client uploads the file during submit(), so we can delete it right after.
         job = client.submit(
-            input_video=handle_file(temp_filename),
+            input_video=handle_file(temp_path),
             api_name="/predict"
         )
+        
+        # 3. Immediate Cleanup
+        # We don't need the file locally anymore as it's been uploaded to the backend (or HF Space)
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+            print(f"🧹 Deleted temp file {temp_path}")
         
         # Save job ID
         job_id = str(uuid.uuid4())
         jobs[job_id] = {
             "job": job,
             "filename": file.filename,
-            "temp_input": temp_filename,
             "start_time": time.time()
         }
         
@@ -75,6 +89,10 @@ async def process(request: Request, file: UploadFile):
 
     except Exception as e:
         print(f"❌ Error: {e}")
+        # Ensure cleanup on error
+        if 'temp_path' in locals() and os.path.exists(temp_path):
+            os.remove(temp_path)
+            
         return templates.TemplateResponse("partials/error.html", {
             "request": request,
             "error_message": str(e)
@@ -165,8 +183,8 @@ async def stream_status(request: Request, job_id: str):
                 raise Exception(f"Result file not found at {result_path}")
             
             # Cleanup
-            if os.path.exists(job_data["temp_input"]):
-                os.remove(job_data["temp_input"])
+            # if os.path.exists(job_data["temp_input"]):
+            #     os.remove(job_data["temp_input"])
             del jobs[job_id]
             
             # Send result as JSON

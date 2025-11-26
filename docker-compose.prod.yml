@@ -1,0 +1,32 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      - ENV=PROD
+      # Configure your Hugging Face Space URL here
+      # - BACKEND_URL=https://your-username-space-name.hf.space
+      - HF_SPACE=your-username/your-space
+      - HF_TOKEN=your-hf-token
+    expose:
+      - "8000"
+    networks:
+      - app-network
+
+  nginx:
+    image: nginx:alpine
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
