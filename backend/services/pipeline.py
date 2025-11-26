@@ -72,35 +72,44 @@ def generate_video(input_file: str, file_manager: FileManager, progress=None, cl
         intermediate_files.append(audio_file)
 
         # 1.5 Audio separation (Optional but recommended)
-        print("🧠 Separating audio (Vocals/Instrumental)...")
-        if progress: progress(0.2, desc="Separating audio with AI...")
+        # Check if we should skip separation (e.g., on resource-constrained environments)
+        skip_separation = os.getenv("SKIP_AUDIO_SEPARATION", "false").lower() == "true"
+        separation_timeout = int(os.getenv("AUDIO_SEPARATION_TIMEOUT", "300"))  # Default 5 minutes
         
-        # Callback for fluid progress between 0.2 and 0.4
-        def separation_progress(pct):
-            if progress:
-                # Map 0.0-1.0 to 0.2-0.4
-                current = 0.2 + (pct * 0.2)
-                progress(current, desc=f"Separating audio with AI ({int(pct*100)}%)...")
-
-        # Attempt separation
-        stem_file = audio_extractor.separate_audio_ai(
-            audio_file, 
-            output_dir=work_dir,
-            progress_callback=separation_progress
-        )
-        
-        if stem_file:
-            print(f"✅ Using separated stem: {stem_file}")
-            intermediate_files.append(stem_file)
-            if "Instrumental" in stem_file:
-                vocals_file = stem_file.replace("Instrumental", "Vocals")
-                if os.path.exists(vocals_file):
-                    intermediate_files.append(vocals_file)
+        if not skip_separation:
+            print("🧠 Separating audio (Vocals/Instrumental)...")
+            if progress: progress(0.2, desc="Separating audio with AI...")
             
-            # Update domain entity with the best audio source
-            analysis.set_audio(stem_file)
+            # Callback for fluid progress between 0.2 and 0.4
+            def separation_progress(pct):
+                if progress:
+                    # Map 0.0-1.0 to 0.2-0.4
+                    current = 0.2 + (pct * 0.2)
+                    progress(current, desc=f"Separating audio with AI ({int(pct*100)}%)...")
+
+            # Attempt separation with timeout
+            stem_file = audio_extractor.separate_audio_ai(
+                audio_file, 
+                output_dir=work_dir,
+                progress_callback=separation_progress,
+                timeout_seconds=separation_timeout
+            )
+            
+            if stem_file:
+                print(f"✅ Using separated stem: {stem_file}")
+                intermediate_files.append(stem_file)
+                if "Instrumental" in stem_file:
+                    vocals_file = stem_file.replace("Instrumental", "Vocals")
+                    if os.path.exists(vocals_file):
+                        intermediate_files.append(vocals_file)
+                
+                # Update domain entity with the best audio source
+                analysis.set_audio(stem_file)
+            else:
+                print("⚠️ Using original audio (separation failed or timed out)")
+                analysis.set_audio(audio_file)
         else:
-            print("⚠️ Using original audio (fallback)")
+            print("⚠️ Audio separation skipped (SKIP_AUDIO_SEPARATION=true)")
             analysis.set_audio(audio_file)
 
         # 2. Detect chords

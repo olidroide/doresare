@@ -36,7 +36,11 @@ RUN useradd -m -u 1000 user
 ENV HOME=/home/user \
     PATH=/home/user/.local/bin:$PATH \
     HF_HOME=/home/user/hf_cache \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PYTHONIOENCODING=utf-8 \
+    ORT_DISABLE_TELEMETRY=1 \
+    SKIP_AUDIO_SEPARATION=false \
+    AUDIO_SEPARATION_TIMEOUT=300
 
 # Set working directory and ensure ownership
 WORKDIR $HOME/app

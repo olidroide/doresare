@@ -95,79 +95,123 @@ def extract_audio_from_video(video_file: str, output_dir: Optional[str] = None, 
         print(f"❌ Error extracting audio: {e}")
         return None
 
-def separate_audio_ai(input_file: str, output_dir: Optional[str] = None, progress_callback=None) -> Optional[str]:
+def separate_audio_ai(
+    input_file: str, 
+    output_dir: Optional[str] = None, 
+    progress_callback=None,
+    timeout_seconds: int = 300
+) -> Optional[str]:
     """
     Separates audio using audio-separator with 2 stems model.
     Returns only the 'Instrumental' (or 'other') stem for clean chord detection.
     If output_dir is provided, saves files there.
+    
+    Args:
+        input_file: Path to input audio file
+        output_dir: Directory to save separated files
+        progress_callback: Optional callback for progress updates
+        timeout_seconds: Maximum time to wait for separation (default: 300s = 5 minutes)
+        
+    Returns:
+        Path to instrumental stem, or None if separation fails/times out
     """
-    try:
-        print(f"🧠 Starting AI separation (2 stems: vocals/instrumental)...")
-        
-        from audio_separator.separator import Separator
-        
-        # Configure output dir
-        if output_dir:
-            os.makedirs(output_dir, exist_ok=True)
-            separator = Separator(output_dir=output_dir, log_level=logging.WARNING)
-        else:
-            separator = Separator(log_level=logging.WARNING)
-
-        # Use MDX-Net Inst model (2 stems: vocals/instrumental)
-        separator.load_model(model_filename='UVR-MDX-NET-Inst_HQ_3.onnx')
-        
-        # Separate capturing stderr for progress
-        output_files = []
-        if progress_callback:
-            with TqdmProgressCapturer(progress_callback):
-                output_files = separator.separate(input_file)
-        else:
-            output_files = separator.separate(input_file)
-        
-        print(f"📂 Separated files generated: {output_files}")
-        
-        # Find instrumental stem
-        # Model usually generates: "{filename}_(Instrumental)_..."
-        target_stem = None
-        
-        for file in output_files:
-            # If output_dir was set, audio-separator returns only filenames, not full paths (sometimes)
-            # Build full path
-            full_path = os.path.join(output_dir, file) if output_dir else file
-                
-            if "Instrumental" in file or "other" in file:
-                target_stem = full_path
-                break
-        
-        if target_stem:
-            print(f"✅ Instrumental stem found: {target_stem}")
-            return target_stem
+    import threading
+    
+    result = {'output_files': None, 'error': None, 'timed_out': False}
+    
+    def separation_worker():
+        """Worker function that performs the actual separation"""
+        try:
+            print(f"🧠 Starting AI separation (2 stems: vocals/instrumental)...")
+            print(f"⏱️  Timeout set to {timeout_seconds} seconds")
             
-        # If explicit not found, return second (assuming first is vocals)
-        if len(output_files) > 1:
-            # Assume the one that is NOT vocals is the good one
-            for file in output_files:
-                if "Vocals" not in file:
-                    if output_dir:
-                        return os.path.join(output_dir, file)
-                    return file
-                    
-        # Fallback
-        if output_files:
-            first = output_files[0]
+            from audio_separator.separator import Separator
+            
+            # Configure output dir
             if output_dir:
-                return os.path.join(output_dir, first)
-            return first
-        
-        print("⚠️ No separated files generated")
-        return None
+                os.makedirs(output_dir, exist_ok=True)
+                separator = Separator(output_dir=output_dir, log_level=logging.WARNING)
+            else:
+                separator = Separator(log_level=logging.WARNING)
+
+            # Use MDX-Net Inst model (2 stems: vocals/instrumental)
+            separator.load_model(model_filename='UVR-MDX-NET-Inst_HQ_3.onnx')
             
-    except Exception as e:
-        print(f"❌ Error in AI separation: {e}")
+            # Separate capturing stderr for progress
+            if progress_callback:
+                with TqdmProgressCapturer(progress_callback):
+                    result['output_files'] = separator.separate(input_file)
+            else:
+                result['output_files'] = separator.separate(input_file)
+                
+        except Exception as e:
+            result['error'] = e
+    
+    # Start separation in a separate thread
+    worker_thread = threading.Thread(target=separation_worker, daemon=True)
+    worker_thread.start()
+    
+    # Wait for completion or timeout
+    worker_thread.join(timeout=timeout_seconds)
+    
+    # Check if thread is still alive (timed out)
+    if worker_thread.is_alive():
+        result['timed_out'] = True
+        print(f"⏱️ Audio separation timed out after {timeout_seconds} seconds")
+        print("⚠️ Falling back to original audio...")
+        return None
+    
+    # Check for errors
+    if result['error']:
+        print(f"❌ Error in AI separation: {result['error']}")
         import traceback
         traceback.print_exc()
-        print("⚠️ Continuing with original audio...")
+        print("⚠️ Falling back to original audio...")
         return None
+    
+    # Process output files
+    output_files = result['output_files']
+    if not output_files:
+        print("⚠️ No separated files generated")
+        return None
+        
+    print(f"📂 Separated files generated: {output_files}")
+    
+    # Find instrumental stem
+    target_stem = None
+    
+    for file in output_files:
+        # If output_dir was set, audio-separator returns only filenames, not full paths (sometimes)
+        # Build full path
+        full_path = os.path.join(output_dir, file) if output_dir else file
+            
+        if "Instrumental" in file or "other" in file:
+            target_stem = full_path
+            break
+    
+    if target_stem:
+        print(f"✅ Instrumental stem found: {target_stem}")
+        return target_stem
+        
+    # If explicit not found, return second (assuming first is vocals)
+    if len(output_files) > 1:
+        # Assume the one that is NOT vocals is the good one
+        for file in output_files:
+            if "Vocals" not in file:
+                if output_dir:
+                    return os.path.join(output_dir, file)
+                return file
+                
+    # Fallback
+    if output_files:
+        first = output_files[0]
+        if output_dir:
+            return os.path.join(output_dir, first)
+        return first
+    
+    print("⚠️ No separated files generated")
+    return None
+
 
 def clean_audio_for_chords(y: np.ndarray, sr: int) -> np.ndarray:
     """
