@@ -8,6 +8,10 @@ from typing import Optional
 import numpy as np
 import librosa
 
+# Global variables for singleton model
+_global_separator = None
+_global_separator_output_dir = None
+
 def check_resources():
     """
     Checks if necessary resources (AI models) are available.
@@ -95,6 +99,35 @@ def extract_audio_from_video(video_file: str, output_dir: Optional[str] = None, 
         print(f"❌ Error extracting audio: {e}")
         return None
 
+def load_global_model():
+    """
+    Initializes the global Separator instance and loads the model.
+    This should be called at application startup.
+    """
+    global _global_separator, _global_separator_output_dir
+    
+    try:
+        print("🧠 Loading global AI separation model...")
+        from audio_separator.separator import Separator
+        
+        # Create a fixed temporary directory for the global separator
+        # We need a persistent temp dir because the separator instance will keep writing there
+        _global_separator_output_dir = os.path.join(tempfile.gettempdir(), "doresare_global_separator")
+        os.makedirs(_global_separator_output_dir, exist_ok=True)
+        
+        # Initialize separator with fixed output dir
+        _global_separator = Separator(output_dir=_global_separator_output_dir, log_level=logging.WARNING)
+        
+        # Load the model explicitly
+        # This is the heavy operation we want to do once
+        _global_separator.load_model(model_filename='UVR-MDX-NET-Inst_HQ_3.onnx')
+        print("✅ Global AI separation model loaded successfully.")
+        
+    except Exception as e:
+        print(f"❌ Failed to load global AI model: {e}")
+        _global_separator = None
+        # We don't raise here, so the app can still start (will fall back to per-request loading or fail later)
+
 def separate_audio_ai(
     input_file: str, 
     output_dir: Optional[str] = None, 
@@ -116,6 +149,7 @@ def separate_audio_ai(
         Path to instrumental stem, or None if separation fails/times out
     """
     import threading
+    import shutil
     
     result = {'output_files': None, 'error': None, 'timed_out': False}
     
@@ -127,22 +161,52 @@ def separate_audio_ai(
             
             from audio_separator.separator import Separator
             
-            # Configure output dir
-            if output_dir:
-                os.makedirs(output_dir, exist_ok=True)
-                separator = Separator(output_dir=output_dir, log_level=logging.WARNING)
+            # Use global separator if available
+            global _global_separator, _global_separator_output_dir
+            
+            if _global_separator:
+                print("🚀 Using pre-loaded global AI model")
+                separator = _global_separator
+                using_global = True
             else:
-                separator = Separator(log_level=logging.WARNING)
-
-            # Use MDX-Net Inst model (2 stems: vocals/instrumental)
-            separator.load_model(model_filename='UVR-MDX-NET-Inst_HQ_3.onnx')
+                print("⚠️ Global model not loaded, creating new instance (slower)")
+                # Configure output dir
+                if output_dir:
+                    os.makedirs(output_dir, exist_ok=True)
+                    separator = Separator(output_dir=output_dir, log_level=logging.WARNING)
+                else:
+                    separator = Separator(log_level=logging.WARNING)
+                
+                # Load model (heavy op)
+                separator.load_model(model_filename='UVR-MDX-NET-Inst_HQ_3.onnx')
+                using_global = False
             
             # Separate capturing stderr for progress
             if progress_callback:
                 with TqdmProgressCapturer(progress_callback):
-                    result['output_files'] = separator.separate(input_file)
+                    output_files = separator.separate(input_file)
             else:
-                result['output_files'] = separator.separate(input_file)
+                output_files = separator.separate(input_file)
+            
+            # If using global separator, we need to move files to the requested output_dir
+            if using_global and output_dir and output_files:
+                moved_files = []
+                os.makedirs(output_dir, exist_ok=True)
+                
+                for filename in output_files:
+                    source_path = os.path.join(_global_separator_output_dir, filename)
+                    dest_path = os.path.join(output_dir, filename)
+                    
+                    # Move file
+                    if os.path.exists(source_path):
+                        shutil.move(source_path, dest_path)
+                        moved_files.append(filename) # Keep just filename as that's what separate returns
+                    else:
+                        print(f"⚠️ Could not find expected output file: {source_path}")
+                
+                result['output_files'] = moved_files
+            else:
+                result['output_files'] = output_files
                 
         except Exception as e:
             result['error'] = e

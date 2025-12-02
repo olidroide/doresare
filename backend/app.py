@@ -17,6 +17,10 @@ print("🚀 Initializing backend services...")
 try:
     font_manager.check_resources()
     audio_extractor.check_resources()
+    
+    # Load heavy AI models at startup
+    audio_extractor.load_global_model()
+    
     print("✅ All services ready.")
 except Exception as e:
     print(f"❌ Startup check failed: {e}")
