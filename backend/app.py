@@ -32,4 +32,5 @@ app = create_app(font_manager)
 
 if __name__ == "__main__":
     # Launch server on port 7860 (HF Spaces standard)
-    app.launch(server_name="0.0.0.0", server_port=7860, show_error=True)
+    share = os.getenv("GRADIO_SHARE", "false").lower() == "true"
+    app.launch(server_name="0.0.0.0", server_port=7860, show_error=True, share=share)
