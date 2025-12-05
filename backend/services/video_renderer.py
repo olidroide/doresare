@@ -563,14 +563,34 @@ def render_video_with_overlays(analysis: VideoAnalysis, progress=None, start_pct
         logger = MoviePyProgressLogger(progress, start_pct, end_pct)
         
         # Write file
-        final_video.write_videofile(
-            analysis.output_path, 
-            codec='libx264', 
-            audio_codec='aac', 
-            logger=logger,
-            threads=4,
-            preset='ultrafast'
-        )
+        # Write file with conditional GPU support
+        use_gpu = os.getenv("MOVIEPY_USE_GPU", "false").lower() == "true"
+        
+        if use_gpu:
+            print("🚀 Rendering with basic GPU acceleration (h264_nvenc)...")
+            final_video.write_videofile(
+                analysis.output_path, 
+                codec='h264_nvenc', 
+                audio_codec='aac', 
+                logger=logger,
+                threads=4, # MoviePy threads (audio/writing)
+                # No 'preset' for nvenc usually, but we can pass ffmpeg params
+                ffmpeg_params=[
+                    '-rc', 'constqp', 
+                    '-qp', '24',    # Quality parameter (lower = better)
+                    '-preset', 'p4' # Performance preset (p1=fastest, p7=slowest)
+                ]
+            )
+        else:
+            print("🐌 Rendering with CPU (libx264)...")
+            final_video.write_videofile(
+                analysis.output_path, 
+                codec='libx264', 
+                audio_codec='aac', 
+                logger=logger,
+                threads=4,
+                preset='ultrafast'
+            )
         
         # Cleanup video objects
         video.close()

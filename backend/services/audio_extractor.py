@@ -120,7 +120,9 @@ def load_global_model():
         
         # Load the model explicitly
         # This is the heavy operation we want to do once
-        _global_separator.load_model(model_filename='UVR-MDX-NET-Inst_HQ_3.onnx')
+        model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_HQ_3.onnx')
+        print(f"🧠 Loading global AI mode: {model_name}...")
+        _global_separator.load_model(model_filename=model_name)
         print("✅ Global AI separation model loaded successfully.")
         
     except Exception as e:
@@ -178,7 +180,9 @@ def separate_audio_ai(
                     separator = Separator(log_level=logging.WARNING)
                 
                 # Load model (heavy op)
-                separator.load_model(model_filename='UVR-MDX-NET-Inst_HQ_3.onnx')
+                model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_HQ_3.onnx')
+                print(f"🧠 Loading specific model: {model_name}")
+                separator.load_model(model_filename=model_name)
                 using_global = False
             
             # Separate capturing stderr for progress
