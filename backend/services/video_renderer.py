@@ -568,19 +568,28 @@ def render_video_with_overlays(analysis: VideoAnalysis, progress=None, start_pct
         
         if use_gpu:
             print("🚀 Rendering with basic GPU acceleration (h264_nvenc)...")
-            final_video.write_videofile(
-                analysis.output_path, 
-                codec='h264_nvenc', 
-                audio_codec='aac', 
-                logger=logger,
-                threads=4, # MoviePy threads (audio/writing)
-                # No 'preset' for nvenc usually, but we can pass ffmpeg params
-                ffmpeg_params=[
-                    '-rc', 'constqp', 
-                    '-qp', '24',    # Quality parameter (lower = better)
-                    '-preset', 'p4' # Performance preset (p1=fastest, p7=slowest)
-                ]
-            )
+            try:
+                final_video.write_videofile(
+                    analysis.output_path, 
+                    codec='h264_nvenc', 
+                    audio_codec='aac', 
+                    logger=logger,
+                    threads=4, 
+                    # Simpler params to avoid 'Unrecognized option' errors
+                    # We rely on default bitrate or simple preset
+                    ffmpeg_params=['-preset', 'fast'] 
+                )
+            except Exception as e:
+                print(f"⚠️ GPU processing failed: {e}")
+                print("🔄 Falling back to CPU rendering (libx264)...")
+                final_video.write_videofile(
+                    analysis.output_path, 
+                    codec='libx264', 
+                    audio_codec='aac', 
+                    logger=logger,
+                    threads=4,
+                    preset='ultrafast'
+                )
         else:
             print("🐌 Rendering with CPU (libx264)...")
             final_video.write_videofile(
