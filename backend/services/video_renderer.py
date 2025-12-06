@@ -577,6 +577,12 @@ def render_video_with_overlays(analysis: VideoAnalysis, progress=None, start_pct
             preset = os.getenv("MOVIEPY_FFMPEG_PRESET", "fast")
             if preset and preset.lower() != "none":
                 ffmpeg_params.extend(['-preset', preset])
+
+            # QSV Requirement: Force NV12 pixel format for hardware encoding
+            # MoviePy usually outputs RGB, which QSV cannot consume directly without conversion
+            if "qsv" in codec:
+                print("🔧 Detected QSV codec, adding '-pix_fmt nv12'")
+                ffmpeg_params.extend(['-pix_fmt', 'nv12'])
                 
             # Extra params via env var (space separated)
             # e.g. "-global_quality 25 -look_ahead 1"

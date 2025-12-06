@@ -46,7 +46,10 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Set up non-root user for Hugging Face Spaces
-RUN useradd -m -u 1000 user
+# Set up non-root user for Hugging Face Spaces
+# Add to video and render groups for hardware access
+RUN useradd -m -u 1000 user && \
+    usermod -aG video,render user || true
 ENV HOME=/home/user \
     PATH=/home/user/.local/bin:$PATH \
     HF_HOME=/home/user/hf_cache \
