@@ -23,7 +23,8 @@ try:
     separator = Separator(log_level=logging.INFO)
     
     # Load the specific model used in the pipeline
-    model_name = 'UVR-MDX-NET-Inst_HQ_3.onnx'
+    # Using 'Main' model by default for better performance on home servers
+    model_name = 'UVR-MDX-NET-Inst_Main.onnx'
     print(f"⬇️ Downloading model: {model_name}")
     separator.load_model(model_filename=model_name)
     

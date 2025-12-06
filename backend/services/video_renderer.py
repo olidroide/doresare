@@ -589,6 +589,8 @@ def render_video_with_overlays(analysis: VideoAnalysis, progress=None, start_pct
             extra_params = os.getenv("MOVIEPY_FFMPEG_PARAMS", "")
             if extra_params:
                 ffmpeg_params.extend(extra_params.split())
+                
+            print(f"🔧 Final ffmpeg_params for {codec}: {ffmpeg_params}")
 
             try:
                 final_video.write_videofile(

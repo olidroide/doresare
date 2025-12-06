@@ -115,19 +115,21 @@ def load_global_model():
         _global_separator_output_dir = os.path.join(tempfile.gettempdir(), "doresare_global_separator")
         os.makedirs(_global_separator_output_dir, exist_ok=True)
         
+        # Determine log level
+        log_level_str = os.getenv('AUDIO_SEPARATOR_LOG_LEVEL', 'INFO').upper()
+        log_level = getattr(logging, log_level_str, logging.INFO)
+        
         # Initialize separator with fixed output dir
-        # Note: We rely on audio-separator detecting the installed onnxruntime-openvino automatically.
-        # It does not accept onnx_execution_provider in __init__.
         providers_env = os.getenv('ONNXRUNTIME_EXECUTION_PROVIDERS')
         if providers_env:
             print(f"🚀 Environment requests ONNX providers: {providers_env}")
             
-        _global_separator = Separator(output_dir=_global_separator_output_dir, log_level=logging.WARNING)
+        _global_separator = Separator(output_dir=_global_separator_output_dir, log_level=log_level)
         
         # Load the model explicitly
         # This is the heavy operation we want to do once
         model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_HQ_3.onnx')
-        print(f"🧠 Loading global AI mode: {model_name}...")
+        print(f"🧠 Loading global AI model: {model_name} (Log Level: {log_level_str})...")
         _global_separator.load_model(model_filename=model_name)
         print("✅ Global AI separation model loaded successfully.")
         
@@ -180,15 +182,18 @@ def separate_audio_ai(
                 print("⚠️ Global model not loaded, creating new instance (slower)")
                 # Configure output dir
                 # Configure output dir
+                log_level_str = os.getenv('AUDIO_SEPARATOR_LOG_LEVEL', 'INFO').upper()
+                log_level = getattr(logging, log_level_str, logging.INFO)
+                
                 providers_env = os.getenv('ONNXRUNTIME_EXECUTION_PROVIDERS')
                 if providers_env:
                      print(f"🚀 Environment requests ONNX providers: {providers_env}")
 
                 if output_dir:
                     os.makedirs(output_dir, exist_ok=True)
-                    separator = Separator(output_dir=output_dir, log_level=logging.WARNING)
+                    separator = Separator(output_dir=output_dir, log_level=log_level)
                 else:
-                    separator = Separator(log_level=logging.WARNING)
+                    separator = Separator(log_level=log_level)
                 
                 # Load model (heavy op)
                 model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_HQ_3.onnx')
@@ -197,11 +202,13 @@ def separate_audio_ai(
                 using_global = False
             
             # Separate capturing stderr for progress
+            print(f"⤵️ Calling separator.separate({input_file})...")
             if progress_callback:
                 with TqdmProgressCapturer(progress_callback):
                     output_files = separator.separate(input_file)
             else:
                 output_files = separator.separate(input_file)
+            print(f"✅ separator.separate() returned: {output_files}")
             
             # If using global separator, we need to move files to the requested output_dir
             if using_global and output_dir and output_files:
