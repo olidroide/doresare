@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y \
 # Copy dependency files first for caching
 COPY pyproject.toml .
 COPY uv.lock .
+COPY README.md .
 
 # Install dependencies into a virtual environment
 # We use a virtual environment to isolate dependencies from the system
