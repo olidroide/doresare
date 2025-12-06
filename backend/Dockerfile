@@ -25,8 +25,9 @@ ARG USE_OPENVINO=false
 
 RUN if [ "$USE_OPENVINO" = "true" ]; then \
     echo "🚀 Building with OpenVINO support..."; \
-    uv remove onnxruntime || true; \
-    uv add onnxruntime-openvino; \
+    uv remove --no-sync onnxruntime || true; \
+    uv add --no-sync onnxruntime-openvino; \
+    uv sync --no-install-project; \
     else \
     uv sync --frozen --no-install-project; \
     fi
@@ -41,6 +42,7 @@ RUN apt-get update && apt-get install -y \
     intel-media-va-driver \
     libmfx1 \
     vainfo \
+    ocl-icd-libopencl1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Set up non-root user for Hugging Face Spaces

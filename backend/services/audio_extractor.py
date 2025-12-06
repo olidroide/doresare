@@ -115,21 +115,14 @@ def load_global_model():
         _global_separator_output_dir = os.path.join(tempfile.gettempdir(), "doresare_global_separator")
         os.makedirs(_global_separator_output_dir, exist_ok=True)
         
-        # Initialize separator with fixed output dir and optional execution providers
+        # Initialize separator with fixed output dir
+        # Note: We rely on audio-separator detecting the installed onnxruntime-openvino automatically.
+        # It does not accept onnx_execution_provider in __init__.
         providers_env = os.getenv('ONNXRUNTIME_EXECUTION_PROVIDERS')
         if providers_env:
-            # audio-separator expects a list of providers or single string? 
-            # Looking at source, it passes it to onnxruntime InferenceSession.
-            # We'll split by comma just in case multiple are passed
-            providers = [p.strip() for p in providers_env.split(',') if p.strip()]
-            print(f"🚀 Initializing Separator with providers: {providers}")
-            _global_separator = Separator(
-                output_dir=_global_separator_output_dir, 
-                log_level=logging.WARNING,
-                onnx_execution_provider=providers
-            )
-        else:
-            _global_separator = Separator(output_dir=_global_separator_output_dir, log_level=logging.WARNING)
+            print(f"🚀 Environment requests ONNX providers: {providers_env}")
+            
+        _global_separator = Separator(output_dir=_global_separator_output_dir, log_level=logging.WARNING)
         
         # Load the model explicitly
         # This is the heavy operation we want to do once
@@ -186,24 +179,16 @@ def separate_audio_ai(
             else:
                 print("⚠️ Global model not loaded, creating new instance (slower)")
                 # Configure output dir
+                # Configure output dir
                 providers_env = os.getenv('ONNXRUNTIME_EXECUTION_PROVIDERS')
-                providers = [p.strip() for p in providers_env.split(',') if p.strip()] if providers_env else None
-                
-                if providers:
-                     print(f"🚀 Initializing new Separator with providers: {providers}")
+                if providers_env:
+                     print(f"🚀 Environment requests ONNX providers: {providers_env}")
 
                 if output_dir:
                     os.makedirs(output_dir, exist_ok=True)
-                    separator = Separator(
-                        output_dir=output_dir, 
-                        log_level=logging.WARNING,
-                        onnx_execution_provider=providers
-                    )
+                    separator = Separator(output_dir=output_dir, log_level=logging.WARNING)
                 else:
-                    separator = Separator(
-                        log_level=logging.WARNING,
-                        onnx_execution_provider=providers
-                    )
+                    separator = Separator(log_level=logging.WARNING)
                 
                 # Load model (heavy op)
                 model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_HQ_3.onnx')
