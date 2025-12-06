@@ -1,0 +1,23 @@
+services:
+  backend:
+    build:
+      context: .
+      args:
+        USE_OPENVINO: "true"
+    image: doresare-backend:latest
+    container_name: doresare-backend
+    ports:
+      - "7860:7860"
+    device_cgroup_rules:
+      - 'c 226:* rwm'
+    devices:
+      - /dev/dri/renderD128:/dev/dri/renderD128
+      - /dev/dri/card0:/dev/dri/card0
+    env_file:
+      - .env.doresare-backend
+    environment:
+      - GRADIO_SERVER_NAME=0.0.0.0
+    restart: unless-stopped
+    volumes:
+       - ./hf_cache:/home/user/hf_cache
+       - ./video_processing:/home/user/app/video_processing

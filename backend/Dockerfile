@@ -20,7 +20,15 @@ COPY uv.lock .
 # Install dependencies into a virtual environment
 # We use a virtual environment to isolate dependencies from the system
 ENV UV_COMPILE_BYTECODE=1
-RUN uv sync --frozen --no-install-project
+ARG USE_OPENVINO=false
+
+RUN if [ "$USE_OPENVINO" = "true" ]; then \
+    echo "🚀 Building with OpenVINO support..."; \
+    uv remove onnxruntime || true; \
+    uv add onnxruntime-openvino; \
+    else \
+    uv sync --frozen --no-install-project; \
+    fi
 
 # Stage 2: Runtime
 FROM python:3.12-slim-bookworm
@@ -29,6 +37,9 @@ FROM python:3.12-slim-bookworm
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     libsndfile1 \
+    intel-media-va-driver \
+    libmfx1 \
+    vainfo \
     && rm -rf /var/lib/apt/lists/*
 
 # Set up non-root user for Hugging Face Spaces

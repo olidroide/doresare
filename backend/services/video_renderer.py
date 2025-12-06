@@ -567,20 +567,34 @@ def render_video_with_overlays(analysis: VideoAnalysis, progress=None, start_pct
         use_gpu = os.getenv("MOVIEPY_USE_GPU", "false").lower() == "true"
         
         if use_gpu:
-            print("🚀 Rendering with basic GPU acceleration (h264_nvenc)...")
+            codec = os.getenv("MOVIEPY_FFMPEG_CODEC", "h264_nvenc")
+            print(f"🚀 Rendering with GPU acceleration ({codec})...")
+            
+            # Build ffmpeg_params
+            ffmpeg_params = []
+            
+            # Preset (default to 'fast' if not specified, but allow empty to skip)
+            preset = os.getenv("MOVIEPY_FFMPEG_PRESET", "fast")
+            if preset and preset.lower() != "none":
+                ffmpeg_params.extend(['-preset', preset])
+                
+            # Extra params via env var (space separated)
+            # e.g. "-global_quality 25 -look_ahead 1"
+            extra_params = os.getenv("MOVIEPY_FFMPEG_PARAMS", "")
+            if extra_params:
+                ffmpeg_params.extend(extra_params.split())
+
             try:
                 final_video.write_videofile(
                     analysis.output_path, 
-                    codec='h264_nvenc', 
+                    codec=codec, 
                     audio_codec='aac', 
                     logger=logger,
                     threads=4, 
-                    # Simpler params to avoid 'Unrecognized option' errors
-                    # We rely on default bitrate or simple preset
-                    ffmpeg_params=['-preset', 'fast'] 
+                    ffmpeg_params=ffmpeg_params
                 )
             except Exception as e:
-                print(f"⚠️ GPU processing failed: {e}")
+                print(f"⚠️ GPU processing failed ({codec}): {e}")
                 print("🔄 Falling back to CPU rendering (libx264)...")
                 final_video.write_videofile(
                     analysis.output_path, 

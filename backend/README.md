@@ -88,3 +88,38 @@ The application performs automatic startup checks:
 ## License
 
 MIT License
+
+## Intel Quick Sync & OpenVINO (Home Server)
+
+To deploy on an Intel-based home server (e.g., Celeron J3455) with hardware acceleration:
+
+### 1. Hardware Setup
+Ensure your server has Intel graphics drivers installed and accessible:
+```bash
+ls -l /dev/dri
+# Should show card0 and renderD128
+```
+
+### 2. Enable OpenVINO (Optional)
+To use OpenVINO for faster AI inference on Intel CPUs:
+1.  **Modify Dependencies**:
+    Remove `onnxruntime` and add `onnxruntime-openvino`.
+    ```bash
+    # Run inside backend directory before building
+    uv remove onnxruntime
+    uv add onnxruntime-openvino
+    ```
+2.  **Configure Environment**:
+    Set `ONNXRUNTIME_EXECUTION_PROVIDERS=OpenVINOExecutionProvider` in your `.env.doresare-backend` file.
+
+### 3. Run with Custom Configuration
+Use the dedicated Compose file which mounts devices and loads the home server configuration:
+
+```bash
+docker compose -f doresare-backend.compose.yaml up -d --build
+```
+
+This configuration:
+*   Passes `/dev/dri` devices to the container.
+*   Uses `intel-media-va-driver` for FFmpeg hardware encoding (`h264_qsv`).
+*   Sets higher timeouts for slower CPUs.
