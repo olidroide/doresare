@@ -432,6 +432,84 @@ class MoviePyProgressLogger(ProgressBarLogger):
 
 from domain.models import VideoAnalysis
 
+def _normalize_ffmpeg_params(extra_params: str, existing_params: List[str] = None) -> List[str]:
+    """Normalize a space-separated ffmpeg params string into a safe list.
+
+    Fixes common user-supplied mistakes such as bare 'vbr' without '-rc',
+    missing leading dashes in flags like `global_quality`, and removes
+    duplicates for flags already present in existing_params.
+
+    Args:
+        extra_params: str - the raw parameter string from env (space-separated)
+        existing_params: List[str] - existing ffmpeg_params built earlier to avoid duplicates
+
+    Returns:
+        List[str] - normalized parameters ready to extend ffmpeg_params
+    """
+    if not extra_params:
+        return []
+    tokens = extra_params.split()
+    normalized: List[str] = []
+    seen_flags = set()
+    if existing_params:
+        # collect existing flags (by token that starts with '-') to avoid duplication
+        for t in existing_params:
+            if isinstance(t, str) and t.startswith('-'):
+                seen_flags.add(t)
+
+    i = 0
+    while i < len(tokens):
+        tk = tokens[i]
+        # Convert known bare tokens into proper flags
+        if tk in ('vbr', 'cbr', 'icq', 'cqp'):
+            # These are values, usually for rate control.
+            # Without a preceding flag (like -rc), they are invalid as bare arguments.
+            # Since auto-adding '-rc' caused compatibility issues (Unrecognized option 'rc'),
+            # we will SKIP them and warn the user.
+            print(f"⚠️ Skipping bare parameter '{tk}'. Please specify the full flag in config if needed (e.g. '-rc:v {tk}' or '-rc {tk}').")
+            i += 1
+            continue
+
+        # Convert flags without leading '-' (common user error)
+        if tk in ('global_quality', 'look_ahead'):
+            tk_flag = '-' + tk
+            if tk_flag not in seen_flags:
+                normalized.append(tk_flag)
+                seen_flags.add(tk_flag)
+            # include value if present
+            if i + 1 < len(tokens) and not tokens[i + 1].startswith('-'):
+                normalized.append(tokens[i + 1])
+                i += 2
+                continue
+            i += 1
+            continue
+
+        # Already a flag (starts with '-')
+        if tk.startswith('-'):
+            # check duplicates
+            if tk in seen_flags:
+                # skip flag and its value if present
+                if i + 1 < len(tokens) and not tokens[i + 1].startswith('-'):
+                    i += 2
+                else:
+                    i += 1
+                continue
+            seen_flags.add(tk)
+            normalized.append(tk)
+            # append value if it exists and doesn't start with '-'
+            if i + 1 < len(tokens) and not tokens[i + 1].startswith('-'):
+                normalized.append(tokens[i + 1])
+                i += 2
+            else:
+                i += 1
+            continue
+
+        # token is a stray value without a flag; skip it and print a warning
+        print(f"⚠️ Skipping stray ffmpeg parameter token: '{tk}' - it may be missing a leading flag")
+        i += 1
+
+    return normalized
+
 def render_video_with_overlays(analysis: VideoAnalysis, progress=None, start_pct=0.6, end_pct=1.0, file_manager=None, work_dir=None, font_manager: FontManager = None):
     """
     Generates the final video with chord overlays using VideoAnalysis aggregate.
@@ -588,17 +666,33 @@ def render_video_with_overlays(analysis: VideoAnalysis, progress=None, start_pct
             # e.g. "-global_quality 25 -look_ahead 1"
             extra_params = os.getenv("MOVIEPY_FFMPEG_PARAMS", "")
             if extra_params:
-                ffmpeg_params.extend(extra_params.split())
+                # Use the helper to normalize and merge params safely
+                normalized = _normalize_ffmpeg_params(extra_params, existing_params=ffmpeg_params)
+                ffmpeg_params.extend(normalized)
                 
             print(f"🔧 Final ffmpeg_params for {codec}: {ffmpeg_params}")
 
             try:
+                # If it's a hardware codec, we must ensure encoder-specific flags
+                # (e.g. -rc, -global_quality) appear AFTER '-c:v <codec>' in ffmpeg.
+                # MoviePy sometimes places ffmpeg_params before the codec, so we
+                # explicitly inject '-c:v <codec>' at the start of ffmpeg_params
+                # and pass codec=None to prevent MoviePy from adding it earlier.
+                hw_codecs = ('qsv', 'nvenc', 'vaapi', 'v4l2m2m', 'amf')
+                if any(k in codec for k in hw_codecs):
+                    # ensure we don't duplicate the flag
+                    if not (len(ffmpeg_params) >= 2 and ffmpeg_params[0] == '-c:v'):
+                        ffmpeg_params = ['-c:v', codec] + ffmpeg_params
+                    target_codec = None
+                else:
+                    target_codec = codec
+
                 final_video.write_videofile(
-                    analysis.output_path, 
-                    codec=codec, 
-                    audio_codec='aac', 
+                    analysis.output_path,
+                    codec=target_codec,
+                    audio_codec='aac',
                     logger=logger,
-                    threads=4, 
+                    threads=4,
                     ffmpeg_params=ffmpeg_params
                 )
             except Exception as e:

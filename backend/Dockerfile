@@ -25,6 +25,7 @@ COPY README.md .
 # Install dependencies into a virtual environment
 # We use a virtual environment to isolate dependencies from the system
 ENV UV_COMPILE_BYTECODE=1
+ENV UV_LINK_MODE=copy
 ARG USE_OPENVINO=false
 
 RUN --mount=type=cache,target=/root/.cache/uv \
