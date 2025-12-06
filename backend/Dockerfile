@@ -7,11 +7,15 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 # Set working directory
 WORKDIR /app
 
+# Enable apt caching
+RUN rm -f /etc/apt/apt.conf.d/docker-clean; echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
+
 # Install build dependencies
-RUN apt-get update && apt-get install -y \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && apt-get install -y \
     build-essential \
-    python3-dev \
-    && rm -rf /var/lib/apt/lists/*
+    python3-dev
 
 # Copy dependency files first for caching
 COPY pyproject.toml .
@@ -23,7 +27,8 @@ COPY README.md .
 ENV UV_COMPILE_BYTECODE=1
 ARG USE_OPENVINO=false
 
-RUN if [ "$USE_OPENVINO" = "true" ]; then \
+RUN --mount=type=cache,target=/root/.cache/uv \
+    if [ "$USE_OPENVINO" = "true" ]; then \
     echo "🚀 Building with OpenVINO support..."; \
     uv remove --no-sync onnxruntime || true; \
     uv add --no-sync onnxruntime-openvino; \
@@ -35,17 +40,20 @@ RUN if [ "$USE_OPENVINO" = "true" ]; then \
 # Stage 2: Runtime
 FROM python:3.12-slim-bookworm
 
+# Enable apt caching
+RUN rm -f /etc/apt/apt.conf.d/docker-clean; echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
+
 # Install runtime dependencies
-RUN apt-get update && apt-get install -y \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && apt-get install -y \
     ffmpeg \
     libsndfile1 \
     intel-media-va-driver \
     libmfx1 \
     vainfo \
-    ocl-icd-libopencl1 \
-    && rm -rf /var/lib/apt/lists/*
+    ocl-icd-libopencl1
 
-# Set up non-root user for Hugging Face Spaces
 # Set up non-root user for Hugging Face Spaces
 # Add to video and render groups for hardware access
 RUN useradd -m -u 1000 user && \
@@ -71,14 +79,20 @@ COPY --from=builder --chown=user:user /app/.venv /app/.venv
 # Enable the virtual environment
 ENV PATH="/app/.venv/bin:$PATH"
 
-# Copy application code
-COPY --chown=user:user . .
-
 # Create cache directory for models
 RUN mkdir -p $HF_HOME
 
-# Pre-download AI models during build
+# Optimization: Copy only files needed for model download first
+# This ensures that changes to app code don't invalidate the model download cache
+COPY --chown=user:user services/font_manager.py services/
+COPY --chown=user:user assets assets
+COPY --chown=user:user download_models.py .
+
+# Pre-download AI models during build (now cached separately)
 RUN python download_models.py
+
+# Copy application code (everything else)
+COPY --chown=user:user . .
 
 # Expose port 7860
 EXPOSE 7860
