@@ -484,6 +484,21 @@ def _normalize_ffmpeg_params(extra_params: str, existing_params: List[str] = Non
             i += 1
             continue
 
+        # ALLOW '-rc' explicitly now, as we've fixed the conflict issues or user knows what they are doing.
+        # Previously blacklisted, but needed for 'cbr', 'vbr', 'cqp' modes in QSV/NVENC.
+        if tk == '-rc':
+             if i + 1 < len(tokens) and not tokens[i + 1].startswith('-'):
+                 normalized.append(tk)
+                 normalized.append(tokens[i + 1])
+                 seen_flags.add(tk)
+                 i += 2
+             else:
+                 # Flag without value?
+                 normalized.append(tk)
+                 seen_flags.add(tk)
+                 i += 1
+             continue
+
         # Already a flag (starts with '-')
         if tk.startswith('-'):
             # check duplicates
@@ -658,9 +673,20 @@ def render_video_with_overlays(analysis: VideoAnalysis, progress=None, start_pct
 
             # QSV Requirement: Force NV12 pixel format for hardware encoding
             # MoviePy usually outputs RGB, which QSV cannot consume directly without conversion
+            # QSV Requirement: Force NV12 pixel format and upload to hardware
+            # MoviePy pipes raw SW frames. We must upload them to QSV memory.
+            # 'extra_hw_frames=64' is CRITICAL for QSV stability to avoid "fixed frame pool size" errors.
             if "qsv" in codec:
-                print("🔧 Detected QSV codec, adding '-pix_fmt nv12'")
-                ffmpeg_params.extend(['-pix_fmt', 'nv12'])
+                print("🔧 Detected QSV codec, adding device init and '-vf format=nv12,hwupload=extra_hw_frames=64'")
+                # Initialize QSV device and map it to the filter graph
+                # This is crucial for 'hwupload' to work with 'h264_qsv' when input is from SW (MoviePy).
+                ffmpeg_params.extend(['-init_hw_device', 'qsv=qsv', '-filter_hw_device', 'qsv'])
+                # We use a video filter to handle format conversion and upload to GPU memory
+                ffmpeg_params.extend(['-vf', 'format=nv12,hwupload=extra_hw_frames=64'])
+            # For NVENC, -pix_fmt nv12 (or yuv420p) is usually enough, but let's stick to simple for now.
+            elif "nvenc" in codec:
+                 ffmpeg_params.extend(['-pix_fmt', 'yuv420p']) # Safe default for NVENC compatibility
+
                 
             # Extra params via env var (space separated)
             # e.g. "-global_quality 25 -look_ahead 1"
