@@ -677,12 +677,12 @@ def render_video_with_overlays(analysis: VideoAnalysis, progress=None, start_pct
             # MoviePy pipes raw SW frames. We must upload them to QSV memory.
             # 'extra_hw_frames=64' is CRITICAL for QSV stability to avoid "fixed frame pool size" errors.
             if "qsv" in codec:
-                print("🔧 Detected QSV codec, adding device init and '-vf format=nv12,hwupload=extra_hw_frames=64'")
-                # Initialize QSV device and map it to the filter graph
-                # This is crucial for 'hwupload' to work with 'h264_qsv' when input is from SW (MoviePy).
-                ffmpeg_params.extend(['-init_hw_device', 'qsv=qsv', '-filter_hw_device', 'qsv'])
-                # We use a video filter to handle format conversion and upload to GPU memory
-                ffmpeg_params.extend(['-vf', 'format=nv12,hwupload=extra_hw_frames=64'])
+                print("🔧 Detected QSV codec: Using minimal user-defined params (qsv=hw, veryfast)")
+                # Minimal configuration requested by user
+                # Note: MoviePy inputs are software frames, so we MUST upload them.
+                ffmpeg_params.extend(['-init_hw_device', 'qsv=hw', '-filter_hw_device', 'qsv'])
+                ffmpeg_params.extend(['-vf', 'format=nv12,hwupload'])
+            # For NVENC, -pix_fmt nv12 (or yuv420p) is usually enough, but let's stick to simple for now.
             # For NVENC, -pix_fmt nv12 (or yuv420p) is usually enough, but let's stick to simple for now.
             elif "nvenc" in codec:
                  ffmpeg_params.extend(['-pix_fmt', 'yuv420p']) # Safe default for NVENC compatibility
