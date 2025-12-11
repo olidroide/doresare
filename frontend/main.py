@@ -113,7 +113,7 @@ async def stream_status(request: Request, job_id: str):
         
         while not job.done():
             status = job.status()
-            print(f"🔍 DEBUG: Job Status Code: {status.code}")
+            print(f"🔍 DEBUG: Job Status Code: {status.code}, rank={status.rank}, queue_size={status.queue_size}")
             
             # Calculate progress
             progress = 0
@@ -129,27 +129,35 @@ async def stream_status(request: Request, job_id: str):
                     except Exception as e: 
                         print(f"⚠️ Error parsing progress: {e}")
             
-            # Queue info - Gradio ranks: 0=processing, 1+=waiting
-            print(f"🔍 DEBUG: status.rank={status.rank}, status.queue_size={status.queue_size}")
-            
+            # Determine queue position
             # Manually count active jobs to have real total
             total_active_jobs = len(jobs)
             
-            if status.rank is not None and status.queue_size is not None:
-                if status.rank == 0:
-                    # rank=0 means currently processing (not waiting)
-                    position = "Processing"
-                    queue_size = "-"
+            # Check if job is queued or processing
+            # Gradio status.code is a string: "QUEUED", "PROCESSING", "STARTING", "SUCCESS", "FAILED"
+            status_code = str(status.code).upper()
+            
+            if "QUEUE" in status_code or status_code == "PENDING":
+                # Job is definitely waiting in queue
+                if status.rank is not None:
+                    # Use Gradio's rank (0-indexed position in queue)
+                    position = str(status.rank + 1)  # Make it 1-indexed for display
                 else:
-                    # rank>0 means waiting in queue
-                    # Show human-friendly position
-                    position = status.rank + 1
-                    # Use real count of active jobs for dynamic total
-                    queue_size = total_active_jobs
-            else:
-                # No queue info available
+                    # Gradio didn't provide rank, estimate based on total jobs
+                    position = "Queued"
+                queue_size = str(total_active_jobs) if total_active_jobs > 1 else "-"
+            elif "PROCESS" in status_code or "START" in status_code:
+                # Job is actively being processed or starting
                 position = "Processing"
                 queue_size = "-"
+            else:
+                # Fallback for other states
+                if status.rank is not None and status.rank > 0:
+                    position = str(status.rank + 1)
+                    queue_size = str(total_active_jobs)
+                else:
+                    position = "Processing"
+                    queue_size = "-"
             
             elapsed = int(time.time() - job_data['start_time'])
             
@@ -162,6 +170,7 @@ async def stream_status(request: Request, job_id: str):
                 "queue_size": queue_size,
                 "elapsed_time": elapsed
             }
+            print(f"📤 Sending to client: position={position}, queue_size={queue_size}, progress={progress}%")
             yield f"data: {json.dumps(data)}\n\n"
             await asyncio.sleep(1)
             

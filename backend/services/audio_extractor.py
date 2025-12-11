@@ -33,6 +33,7 @@ class TqdmProgressCapturer:
         self.buffer = ""
         self._pattern = re.compile(r'(\d+)%')
         self.last_progress = 0  # Track last reported progress
+        self.last_logged_pct = -10  # Track last logged percentage (for printing)
 
     def write(self, data):
         self.original_stderr.write(data)
@@ -54,9 +55,17 @@ class TqdmProgressCapturer:
                 # IMPORTANT: Only report if progress increased
                 # This prevents jumps when audio-separator processes multiple stems
                 # (vocals at 96%, then instrumental starting at 0%)
-                if normalized_pct > self.last_progress and self.callback:
+                if normalized_pct > self.last_progress:
                     self.last_progress = normalized_pct
-                    self.callback(normalized_pct)
+                    
+                    # Print to stdout for Docker logs visibility (every 10%)
+                    if pct >= self.last_logged_pct + 10:
+                        print(f"🎵 Audio separation progress: {pct}%")
+                        self.last_logged_pct = pct
+                    
+                    # Call the callback
+                    if self.callback:
+                        self.callback(normalized_pct)
             except ValueError:
                 pass
         
