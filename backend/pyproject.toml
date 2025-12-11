@@ -15,9 +15,9 @@ dependencies = [
     "pillow>=9.0.0",
     "audio-separator>=0.18.0",
     "pychord>=0.6.0",
-    "onnxruntime>=1.16.0",
     "soundfile>=0.12.0",
     "setuptools>=68.0.0",
+    "onnxruntime>=1.16.0",
 ]
 
 [build-system]
