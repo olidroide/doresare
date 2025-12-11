@@ -64,6 +64,7 @@ ENV HOME=/home/user \
     HF_HOME=/home/user/hf_cache \
     PYTHONUNBUFFERED=1 \
     PYTHONIOENCODING=utf-8 \
+    PYTHONFAULTHANDLER=1 \
     ORT_DISABLE_TELEMETRY=1 \
     SKIP_AUDIO_SEPARATION=false \
     AUDIO_SEPARATION_TIMEOUT=300
@@ -98,5 +99,5 @@ COPY --chown=user:user . .
 # Expose port 7860
 EXPOSE 7860
 
-# Run the application
-CMD ["python", "app.py"]
+# Run the application with unbuffered output (-u flag)
+CMD ["python", "-u", "app.py"]

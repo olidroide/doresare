@@ -60,7 +60,7 @@ class TqdmProgressCapturer:
                     
                     # Print to stdout for Docker logs visibility (every 10%)
                     if pct >= self.last_logged_pct + 10:
-                        print(f"🎵 Audio separation progress: {pct}%")
+                        print(f"🎵 Audio separation progress: {pct}%", flush=True)
                         self.last_logged_pct = pct
                     
                     # Call the callback

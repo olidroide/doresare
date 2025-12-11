@@ -108,11 +108,17 @@ def generate_video(input_file: str, file_manager: FileManager, progress=None, cl
             poll_interval = 2  # seconds
             max_wait = separation_timeout
             simulated_progress = 0.2  # Start at 20%
+            last_log_time = 0  # Track when we last logged
             
             while not separation_result['done'] and elapsed < max_wait:
                 import time
                 time.sleep(poll_interval)
                 elapsed += poll_interval
+                
+                # Log heartbeat every 10 seconds for Docker visibility
+                if elapsed - last_log_time >= 10:
+                    print(f"⏳ Audio separation in progress... {elapsed}s elapsed", flush=True)
+                    last_log_time = elapsed
                 
                 # Simulate gradual progress: 0.2 -> 0.38 over 30 seconds (typical separation time)
                 # Increment by 0.006 per 2 seconds (0.003 per second)
@@ -131,7 +137,7 @@ def generate_video(input_file: str, file_manager: FileManager, progress=None, cl
             stem_file = separation_result['stem_file']
             
             if stem_file:
-                print(f"✅ Using separated stem: {stem_file}")
+                print(f"✅ Using separated stem: {stem_file}", flush=True)
                 intermediate_files.append(stem_file)
                 if "Instrumental" in stem_file:
                     vocals_file = stem_file.replace("Instrumental", "Vocals")
