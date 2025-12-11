@@ -93,6 +93,17 @@
                     </form>
                 </div>
 
+                <!-- Queue Status Indicator (outside form container so it stays visible) -->
+                <div class="mt-4 text-center">
+                    <div id="queue-status-display" hx-get="/queue-status" hx-trigger="load, every 5s"
+                        hx-swap="innerHTML">
+                        <div class="inline-flex items-center gap-2 text-xs text-slate-500">
+                            <div class="animate-pulse">⏳</div>
+                            <span>Loading queue status...</span>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Results Container -->
                 <div id="resultado" class="mt-8 empty:mt-0 transition-all"></div>
 

@@ -44,6 +44,19 @@ async def home(request: Request):
 
 import tempfile
 
+@app.get("/queue-status")
+async def queue_status(request: Request):
+    """Get the current queue status"""
+    active_count = len(jobs)
+    return templates.TemplateResponse(
+        "partials/queue_status.html",
+        {
+            "request": request,
+            "active_jobs": active_count,
+            "status": "busy" if active_count > 0 else "available"
+        }
+    )
+
 @app.post("/upload")
 async def process(request: Request, file: UploadFile):
     try:
@@ -134,30 +147,47 @@ async def stream_status(request: Request, job_id: str):
             total_active_jobs = len(jobs)
             
             # Check if job is queued or processing
-            # Gradio status.code is a string: "QUEUED", "PROCESSING", "STARTING", "SUCCESS", "FAILED"
-            status_code = str(status.code).upper()
+            # Gradio status.code format: "Status.QUEUED", "Status.PROCESSING", etc.
+            status_code_str = str(status.code)
+            print(f"🔍 Status code string: '{status_code_str}', rank: {status.rank}")
             
-            if "QUEUE" in status_code or status_code == "PENDING":
-                # Job is definitely waiting in queue
-                if status.rank is not None:
-                    # Use Gradio's rank (0-indexed position in queue)
-                    position = str(status.rank + 1)  # Make it 1-indexed for display
+            # Extract just the status part (after the dot)
+            if '.' in status_code_str:
+                status_name = status_code_str.split('.')[-1].upper()
+            else:
+                status_name = status_code_str.upper()
+            
+            print(f"🔍 Extracted status name: '{status_name}'")
+            
+            # Determine position based on status and rank
+            if status_name == "QUEUED" or "QUEUE" in status_name:
+                # Job is in queue waiting
+                if status.rank is not None and status.rank >= 0:
+                    # rank is 0-indexed position in queue
+                    # If rank=0, it's next in line (position 1 in queue)
+                    # But there's likely 1 job processing, so total = rank + 1 (in queue) + 1 (processing)
+                    queue_position = status.rank + 1  # 1-indexed position in queue
+                    position = f"{queue_position}"
+                    # Total is queue + 1 processing job (if any)
+                    queue_size = str(total_active_jobs)
+                    print(f"📊 QUEUED: rank={status.rank}, showing position {position}/{queue_size}")
                 else:
-                    # Gradio didn't provide rank, estimate based on total jobs
                     position = "Queued"
-                queue_size = str(total_active_jobs) if total_active_jobs > 1 else "-"
-            elif "PROCESS" in status_code or "START" in status_code:
-                # Job is actively being processed or starting
+                    queue_size = str(total_active_jobs) if total_active_jobs > 1 else "-"
+            elif status_name == "PROCESSING" or status_name == "STARTING":
+                # Job is actively being processed
                 position = "Processing"
                 queue_size = "-"
+                print(f"📊 PROCESSING: showing 'Processing/-'")
             else:
-                # Fallback for other states
+                # Fallback for other states (ITERATE, etc.)
                 if status.rank is not None and status.rank > 0:
                     position = str(status.rank + 1)
                     queue_size = str(total_active_jobs)
                 else:
                     position = "Processing"
                     queue_size = "-"
+                print(f"📊 OTHER ({status_name}): position={position}, queue_size={queue_size}")
             
             elapsed = int(time.time() - job_data['start_time'])
             

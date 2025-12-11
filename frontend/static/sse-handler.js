@@ -76,8 +76,20 @@
             progressDesc.textContent = data.progress_desc || 'Processing...';
             console.log('✅ Updated progress desc to:', data.progress_desc);
         }
-        if (queuePosition) queuePosition.textContent = data.position || '-';
-        if (queueSize) queueSize.textContent = data.queue_size || '-';
+
+        // Queue position display
+        if (queuePosition && queueSize) {
+            if (data.position === 'Processing' || data.queue_size === '-') {
+                // Just show "Processing" without the slash
+                queuePosition.textContent = 'Processing';
+                queueSize.textContent = '';
+            } else {
+                // Show position/total
+                queuePosition.textContent = data.position || '-';
+                queueSize.textContent = data.queue_size || '-';
+            }
+        }
+
         if (elapsedTime) {
             const formattedTime = data.elapsed_time ? data.elapsed_time + 's' : '0s';
             elapsedTime.textContent = formattedTime;

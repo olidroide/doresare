@@ -19,17 +19,23 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Hide upload form when processing starts
     // HTMX triggers this event before showing the indicator
+    // Only hide for /upload requests, not for /queue-status
     document.body.addEventListener('htmx:beforeRequest', function (event) {
-        const uploadFormContainer = document.getElementById('upload-form-container');
-        if (uploadFormContainer) {
-            // Fade out animation
-            uploadFormContainer.style.transition = 'opacity 0.3s ease-out, transform 0.3s ease-out';
-            uploadFormContainer.style.opacity = '0';
-            uploadFormContainer.style.transform = 'scale(0.95)';
+        // Check if this is the upload form submission
+        const targetUrl = event.detail.requestConfig.path;
 
-            setTimeout(() => {
-                uploadFormContainer.style.display = 'none';
-            }, 300);
+        if (targetUrl && targetUrl.includes('/upload')) {
+            const uploadFormContainer = document.getElementById('upload-form-container');
+            if (uploadFormContainer) {
+                // Fade out animation
+                uploadFormContainer.style.transition = 'opacity 0.3s ease-out, transform 0.3s ease-out';
+                uploadFormContainer.style.opacity = '0';
+                uploadFormContainer.style.transform = 'scale(0.95)';
+
+                setTimeout(() => {
+                    uploadFormContainer.style.display = 'none';
+                }, 300);
+            }
         }
     });
 });

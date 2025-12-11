@@ -1,0 +1,16 @@
+{% if active_jobs == 0 %}
+<div class="inline-flex items-center gap-2 text-xs">
+    <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+    <span class="text-green-400 font-medium">Server available</span>
+</div>
+{% elif active_jobs == 1 %}
+<div class="inline-flex items-center gap-2 text-xs">
+    <div class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></div>
+    <span class="text-yellow-400 font-medium">1 video processing</span>
+</div>
+{% else %}
+<div class="inline-flex items-center gap-2 text-xs">
+    <div class="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></div>
+    <span class="text-orange-400 font-medium">{{ active_jobs }} videos in queue</span>
+</div>
+{% endif %}
