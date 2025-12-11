@@ -80,20 +80,55 @@ def generate_video(input_file: str, file_manager: FileManager, progress=None, cl
             print("🧠 Separating audio (Vocals/Instrumental)...")
             if progress: progress(0.2, desc="Separating audio with AI...")
             
-            # Callback for fluid progress between 0.2 and 0.4
-            def separation_progress(pct):
+            # Start separation in background with a shared state
+            import threading
+            separation_result = {'stem_file': None, 'done': False}
+            
+            def run_separation():
+                try:
+                    stem_file = audio_extractor.separate_audio_ai(
+                        audio_file, 
+                        output_dir=work_dir,
+                        progress_callback=None,  # We'll handle progress in main thread
+                        timeout_seconds=separation_timeout
+                    )
+                    separation_result['stem_file'] = stem_file
+                except Exception as e:
+                    print(f"❌ Exception in separation thread: {e}")
+                    separation_result['stem_file'] = None
+                finally:
+                    separation_result['done'] = True
+            
+            # Start separation in background thread
+            sep_thread = threading.Thread(target=run_separation, daemon=True)
+            sep_thread.start()
+            
+            # Poll for completion and report incremental progress
+            elapsed = 0
+            poll_interval = 2  # seconds
+            max_wait = separation_timeout
+            simulated_progress = 0.2  # Start at 20%
+            
+            while not separation_result['done'] and elapsed < max_wait:
+                import time
+                time.sleep(poll_interval)
+                elapsed += poll_interval
+                
+                # Simulate gradual progress: 0.2 -> 0.38 over 30 seconds (typical separation time)
+                # Increment by 0.006 per 2 seconds (0.003 per second)
+                # This gives us 30 * 0.003 = 0.09, so 0.2 + 0.09 = 0.29
+                # Let's be more aggressive: 0.2 -> 0.35 over expected 25 seconds
+                increment = 0.15 / 25 * poll_interval  # 0.15 range over 25 seconds
+                simulated_progress = min(0.35, simulated_progress + increment)
+                
                 if progress:
-                    # Map 0.0-1.0 to 0.2-0.4
-                    current = 0.2 + (pct * 0.2)
-                    progress(current, desc=f"Separating audio with AI ({int(pct*100)}%)...")
-
-            # Attempt separation with timeout
-            stem_file = audio_extractor.separate_audio_ai(
-                audio_file, 
-                output_dir=work_dir,
-                progress_callback=separation_progress,
-                timeout_seconds=separation_timeout
-            )
+                    pct = int((simulated_progress - 0.2) / 0.2 * 100)  # 0-100 for the 0.2-0.4 range
+                    progress(simulated_progress, desc=f"Separating audio with AI ({pct}%)...")
+            
+            # Wait for thread to complete (if it hasn't already)
+            sep_thread.join(timeout=1)
+            
+            stem_file = separation_result['stem_file']
             
             if stem_file:
                 print(f"✅ Using separated stem: {stem_file}")
@@ -111,6 +146,7 @@ def generate_video(input_file: str, file_manager: FileManager, progress=None, cl
         else:
             print("⚠️ Audio separation skipped (SKIP_AUDIO_SEPARATION=true)")
             analysis.set_audio(audio_file)
+
 
         # 2. Detect chords
         print(f"🎸 Detecting chords...")

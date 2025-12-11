@@ -9,15 +9,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
 
-    <!-- Scripts -->
-    <script src="/static/htmx.min.js"></script>
-    <script src="/static/sse.js"></script>
-    <script src="/static/tailwindcss.js"></script>
-    <script src="/static/app.js"></script>
-
-    <!-- Styles -->
-    <link rel="stylesheet" href="/static/custom.css">
-
+    <!-- Tailwind CSS via Play CDN (for development) -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -26,10 +19,8 @@
                         sans: ['Outfit', 'sans-serif'],
                     },
                     colors: {
-                        gray: {
-                            850: '#1f2937',
-                            900: '#111827',
-                            950: '#030712', // Deep dark
+                        slate: {
+                            950: '#030712',
                         }
                     },
                     animation: {
@@ -39,4 +30,13 @@
             }
         }
     </script>
+
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="/static/custom.css">
+
+    <!-- Scripts -->
+    <script src="/static/htmx.min.js"></script>
+    <script src="/static/sse.js"></script>
+    <script src="/static/app.js"></script>
+    <script src="/static/sse-handler.js"></script>
 </head>

@@ -162,6 +162,8 @@ def separate_audio_ai(
     import shutil
     
     result = {'output_files': None, 'error': None, 'timed_out': False}
+    separation_done = threading.Event()
+    last_progress = [0.0]  # Use list to share state between threads
     
     def separation_worker():
         """Worker function that performs the actual separation"""
@@ -201,10 +203,16 @@ def separate_audio_ai(
                 separator.load_model(model_filename=model_name)
                 using_global = False
             
+            # Wrapper to update shared progress state
+            def internal_progress_callback(pct):
+                last_progress[0] = pct
+                if progress_callback:
+                    progress_callback(pct)
+            
             # Separate capturing stderr for progress
             print(f"⤵️ Calling separator.separate({input_file})...")
             if progress_callback:
-                with TqdmProgressCapturer(progress_callback):
+                with TqdmProgressCapturer(internal_progress_callback):
                     output_files = separator.separate(input_file)
             else:
                 output_files = separator.separate(input_file)
@@ -232,13 +240,42 @@ def separate_audio_ai(
                 
         except Exception as e:
             result['error'] = e
+        finally:
+            separation_done.set()
     
     # Start separation in a separate thread
     worker_thread = threading.Thread(target=separation_worker, daemon=True)
     worker_thread.start()
     
+    # Heartbeat thread to report progress every 1 seconds
+    # This ensures the UI doesn't appear stuck
+    def heartbeat_worker():
+        """Reports progress periodically to keep the UI updating"""
+        elapsed = 0
+        heartbeat_interval = 1  # seconds
+        
+        while not separation_done.is_set() and elapsed < timeout_seconds:
+            time.sleep(heartbeat_interval)
+            elapsed += heartbeat_interval
+            
+            # If no progress from separator, simulate gradual progress
+            # This prevents the UI from appearing completely stuck
+            current_progress = last_progress[0]
+            if progress_callback and current_progress < 1.0:
+                # Gradual incremental progress to show activity
+                # Max out at 95% to avoid showing 100% before completion
+                estimated_progress = min(0.95, current_progress + 0.01)
+                if estimated_progress > current_progress:
+                    progress_callback(estimated_progress)
+    
+    heartbeat_thread = threading.Thread(target=heartbeat_worker, daemon=True)
+    heartbeat_thread.start()
+    
     # Wait for completion or timeout
     worker_thread.join(timeout=timeout_seconds)
+    
+    # Signal heartbeat to stop
+    separation_done.set()
     
     # Check if thread is still alive (timed out)
     if worker_thread.is_alive():
