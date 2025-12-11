@@ -212,20 +212,29 @@ def separate_audio_ai(
                 separator.load_model(model_filename=model_name)
                 using_global = False
             
-            # Wrapper to update shared progress state
+            # Wrapper to update shared progress state with logging
+            last_logged_callback_pct = [-10]  # Track last logged pct in callback
+            
             def internal_progress_callback(pct):
                 last_progress[0] = pct
+                
+                # Log every 10% for Docker visibility
+                pct_int = int(pct * 100)
+                if pct_int >= last_logged_callback_pct[0] + 10:
+                    print(f"🎵 Audio separation progress: {pct_int}% (via callback)", flush=True)
+                    last_logged_callback_pct[0] = pct_int
+                
                 if progress_callback:
                     progress_callback(pct)
             
             # Separate capturing stderr for progress
-            print(f"⤵️ Calling separator.separate({input_file})...")
+            print(f"⤵️ Calling separator.separate({input_file})...", flush=True)
             if progress_callback:
                 with TqdmProgressCapturer(internal_progress_callback):
                     output_files = separator.separate(input_file)
             else:
                 output_files = separator.separate(input_file)
-            print(f"✅ separator.separate() returned: {output_files}")
+            print(f"✅ separator.separate() returned: {output_files}", flush=True)
             
             # If using global separator, we need to move files to the requested output_dir
             if using_global and output_dir and output_files:
