@@ -23,8 +23,9 @@ try:
     separator = Separator(log_level=logging.INFO)
     
     # Load the specific model used in the pipeline
-    # Using 'Main' model by default for better performance on home servers
-    model_name = 'UVR-MDX-NET-Inst_Main.onnx'
+    # Using HQ_3 model by default for better performance on low-power CPUs
+    # Can be overridden with AUDIO_SEPARATOR_MODEL environment variable
+    model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_HQ_3.onnx')
     print(f"⬇️ Downloading model: {model_name}")
     separator.load_model(model_filename=model_name)
     

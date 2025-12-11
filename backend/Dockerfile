@@ -69,6 +69,11 @@ ENV HOME=/home/user \
     SKIP_AUDIO_SEPARATION=false \
     AUDIO_SEPARATION_TIMEOUT=300
 
+# Audio Separation Model Configuration:
+# - UVR-MDX-NET-Inst_HQ_3.onnx (default, faster, ~30s, recommended for low-power CPUs)
+# - UVR-MDX-NET-Inst_Main.onnx (slower, ~150s on low-power CPUs, higher quality)
+# Set SKIP_AUDIO_SEPARATION=true to use original audio (fastest, lower chord accuracy)
+
 # Set working directory and ensure ownership
 WORKDIR $HOME/app
 USER root
