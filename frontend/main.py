@@ -59,10 +59,10 @@ async def queue_status(request: Request):
 
 @app.post("/upload")
 async def process(request: Request, file: UploadFile):
+    temp_path = None # Initialize temp_path for error handling
     try:
         # 1. Create a named temporary file
-        # delete=False because we need to close it before passing path to gradio_client,
-        # but we will manually delete it immediately after submission.
+        # delete=False because we need to keep it until the backend finishes processing
         with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file.filename}") as temp_file:
             shutil.copyfileobj(file.file, temp_file)
             temp_path = temp_file.name
@@ -74,24 +74,19 @@ async def process(request: Request, file: UploadFile):
         print(f"🚀 Sending {temp_path} to backend (Async)...")
         
         # Use submit() to not block and get a Job
-        # The client uploads the file during submit(), so we can delete it right after.
+        # IMPORTANT: Gradio client needs the file to exist until job.result() is called
         job = client.submit(
             input_video=handle_file(temp_path),
             api_name="/predict"
         )
         
-        # 3. Immediate Cleanup
-        # We don't need the file locally anymore as it's been uploaded to the backend (or HF Space)
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
-            print(f"🧹 Deleted temp file {temp_path}")
-        
-        # Save job ID
+        # Save job ID and temp file path for cleanup later
         job_id = str(uuid.uuid4())
         jobs[job_id] = {
             "job": job,
             "filename": file.filename,
-            "start_time": time.time()
+            "start_time": time.time(),
+            "temp_file": temp_path  # Store for cleanup after processing
         }
         
         # Return initial HTML of progress bar which will start polling
@@ -221,9 +216,13 @@ async def stream_status(request: Request, job_id: str):
                 print(f"❌ Error: Result file not found at {result_path}")
                 raise Exception(f"Result file not found at {result_path}")
             
-            # Cleanup
-            # if os.path.exists(job_data["temp_input"]):
-            #     os.remove(job_data["temp_input"])
+            # Cleanup temp file
+            temp_file = job_data.get('temp_file')
+            if temp_file and os.path.exists(temp_file):
+                os.remove(temp_file)
+                print(f"🧹 Deleted temp file {temp_file}")
+            
+            # Remove job from tracking
             del jobs[job_id]
             
             # Send result as JSON
@@ -238,6 +237,16 @@ async def stream_status(request: Request, job_id: str):
             print(f"❌ Error in SSE completion: {e}")
             import traceback
             traceback.print_exc()
+            
+            # Cleanup temp file on error too
+            temp_file = job_data.get('temp_file')
+            if temp_file and os.path.exists(temp_file):
+                os.remove(temp_file)
+                print(f"🧹 Deleted temp file {temp_file} (after error)")
+            
+            # Remove job from tracking
+            if job_id in jobs:
+                del jobs[job_id]
             
             # Send error as JSON
             data = {
