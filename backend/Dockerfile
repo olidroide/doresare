@@ -100,35 +100,13 @@ COPY --chown=user:user download_models.py .
 RUN python download_models.py
 
 # If requested, install OpenVINO and convert downloaded ONNX model to OpenVINO IR (FP16)
+COPY --chown=user:user scripts/convert_model_ci.sh /tmp/convert_model_ci.sh
 RUN if [ "$USE_OPENVINO" = "true" ]; then \
     echo "🚀 Installing OpenVINO packages for model conversion..."; \
     pip install --no-cache-dir openvino openvino-dev onnx || true; \
-    cat > /tmp/convert_model.py <<'PY' && \
-import os, subprocess
-name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_HQ_3.onnx')
-search_paths = [os.getenv('HF_HOME', '/home/user/hf_cache'), '/root/.cache', '/root/.cache/audio-separator', '/app/models']
-candidates = []
-for root in search_paths:
-    if not os.path.exists(root):
-        continue
-    for dirpath, _, files in os.walk(root):
-        if name in files:
-            candidates.append(os.path.join(dirpath, name))
-if not candidates:
-    print('⚠️ No ONNX model found to convert; skip OpenVINO conversion')
-else:
-    model = candidates[0]
-    outdir = '/app/models_openvino'
-    os.makedirs(outdir, exist_ok=True)
-    print('🔁 Converting', model, '→', outdir)
-    try:
-        subprocess.check_call(['python', '-m', 'openvino.tools.mo', '--input_model', model, '--compress_to_fp16', '--output_dir', outdir])
-        print('✅ Model converted to OpenVINO IR in', outdir)
-    except Exception as e:
-        print('❌ Conversion failed:', e)
-PY && \
-    python /tmp/convert_model.py || true; \
-    rm -f /tmp/convert_model.py; \
+    chmod +x /tmp/convert_model_ci.sh; \
+    /tmp/convert_model_ci.sh UVR-MDX-NET-Inst_HQ_3.onnx /app/models_openvino || true; \
+    rm -f /tmp/convert_model_ci.sh; \
 fi
 
 # Copy application code (everything else)
