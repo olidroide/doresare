@@ -112,6 +112,8 @@ To use OpenVINO for faster AI inference on Intel CPUs:
 2.  **Configure Environment**:
     Set `ONNXRUNTIME_EXECUTION_PROVIDERS=OpenVINOExecutionProvider` in your `.env.doresare-backend` file.
 
+Note: The backend will attempt to detect and validate the requested `ONNXRUNTIME` providers at startup. If `OpenVINOExecutionProvider` is requested but not available (e.g., `onnxruntime-openvino` not installed), the service will log a warning and fall back to available providers.
+
 ### 3. Run with Custom Configuration
 Use the dedicated Compose file which mounts devices and loads the home server configuration:
 
@@ -123,3 +125,31 @@ This configuration:
 *   Passes `/dev/dri` devices to the container.
 *   Uses `intel-media-va-driver` for FFmpeg hardware encoding (`h264_qsv`).
 *   Sets higher timeouts for slower CPUs.
+
+### 4. Immediate Migration: Build-time OpenVINO conversion (Recommended)
+
+If you want the image to include an OpenVINO-converted model and use the OpenVINO wrapper at runtime, follow these steps:
+
+- Set build arg `USE_OPENVINO=true` when building the backend image so the Dockerfile will install OpenVINO tools and attempt to convert the downloaded ONNX model to OpenVINO IR (FP16).
+
+Example build command:
+```bash
+docker build -t doresare-backend:openvino --build-arg USE_OPENVINO=true backend/
+```
+
+-- Environment variables: only `USE_OPENVINO` is required. If `USE_OPENVINO=true`, the runtime will:
+
+- Use the converted model at `/app/models_openvino/<model-name>.xml` by default (the Docker build step places it there when `USE_OPENVINO=true`).
+- Respect `OPENVINO_MODEL_PATH` if you need a custom path.
+- Use CPU by default and FP16 precision. To override device or precision, set `OPENVINO_DEVICE` and `OPENVINO_PRECISION` (optional).
+
+Example `.env`:
+```bash
+USE_OPENVINO=true
+# Optional overrides:
+# OPENVINO_MODEL_PATH=/app/models_openvino/UVR-MDX-NET-Inst_HQ_3.xml
+# OPENVINO_DEVICE=CPU
+# OPENVINO_PRECISION=FP16
+```
+
+- The Dockerfile will try to locate the downloaded `UVR-MDX-NET-Inst_HQ_3.onnx` in common cache paths and convert it during build to `/app/models_openvino` using the Model Optimizer. If you prefer, pre-place the ONNX file in `backend/models/` so the conversion step can find it deterministically.

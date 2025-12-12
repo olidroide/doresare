@@ -1,12 +1,13 @@
+import logging
 import os
+import re
+import sys
 import tempfile
 import time
-import logging
-import sys
-import re
 from typing import Optional
-import numpy as np
+
 import librosa
+import numpy as np
 
 # Global variables for singleton model
 _global_separator = None
@@ -124,6 +125,24 @@ def load_global_model():
         _global_separator_output_dir = os.path.join(tempfile.gettempdir(), "doresare_global_separator")
         os.makedirs(_global_separator_output_dir, exist_ok=True)
         
+        # If an ONNXRUNTIME provider is requested in env, try to configure onnxruntime
+        providers_env = os.getenv('ONNXRUNTIME_EXECUTION_PROVIDERS')
+        if providers_env:
+            try:
+                import onnxruntime as ort
+                requested_providers = [p.strip() for p in providers_env.split(',') if p.strip()]
+                available_providers = ort.get_available_providers()
+                matched = [p for p in requested_providers if p in available_providers]
+                if matched:
+                    print(f"🚀 Detected requested ONNX Runtime providers available: {matched}")
+                    # Export matched to env (some libs read this var)
+                    os.environ['ONNXRUNTIME_EXECUTION_PROVIDERS'] = ','.join(matched)
+                else:
+                    print(f"⚠️ Requested ONNX providers {requested_providers} not found. Available: {available_providers}")
+                    print("ℹ️ Install onnxruntime-openvino or change 'ONNXRUNTIME_EXECUTION_PROVIDERS' to one of the available providers")
+            except Exception as e:
+                print(f"⚠️ Could not query onnxruntime providers: {e}")
+
         # Determine log level
         log_level_str = os.getenv('AUDIO_SEPARATOR_LOG_LEVEL', 'INFO').upper()
         log_level = getattr(logging, log_level_str, logging.INFO)
@@ -133,7 +152,18 @@ def load_global_model():
         if providers_env:
             print(f"🚀 Environment requests ONNX providers: {providers_env}")
             
-        _global_separator = Separator(output_dir=_global_separator_output_dir, log_level=log_level)
+        # Attempt to pass providers list to Separator, if supported by the library
+        try:
+            # Build kwargs dynamically to avoid static analyzers complaining about 'providers'
+            opts_providers = os.getenv('ONNXRUNTIME_EXECUTION_PROVIDERS')
+            providers_list = [p.strip() for p in opts_providers.split(',') if p.strip()] if opts_providers else None
+            sep_kwargs = {"output_dir": _global_separator_output_dir, "log_level": log_level}
+            if providers_list:
+                sep_kwargs["providers"] = providers_list
+            _global_separator = Separator(**sep_kwargs)
+        except TypeError:
+            # Fallback if the Separator constructor signature doesn't accept our kwargs
+            _global_separator = Separator(output_dir=_global_separator_output_dir, log_level=log_level)
         
         # Load the model explicitly
         # This is the heavy operation we want to do once
@@ -167,8 +197,8 @@ def separate_audio_ai(
     Returns:
         Path to instrumental stem, or None if separation fails/times out
     """
-    import threading
     import shutil
+    import threading
     
     result = {'output_files': None, 'error': None, 'timed_out': False}
     separation_done = threading.Event()
@@ -198,13 +228,28 @@ def separate_audio_ai(
                 
                 providers_env = os.getenv('ONNXRUNTIME_EXECUTION_PROVIDERS')
                 if providers_env:
-                     print(f"🚀 Environment requests ONNX providers: {providers_env}")
+                    print(f"🚀 Environment requests ONNX providers: {providers_env}")
 
-                if output_dir:
-                    os.makedirs(output_dir, exist_ok=True)
-                    separator = Separator(output_dir=output_dir, log_level=log_level)
-                else:
-                    separator = Separator(log_level=log_level)
+                # Try to pass providers list to Separator if supported
+                try:
+                    providers_list = [p.strip() for p in providers_env.split(',') if p.strip()] if providers_env else None
+                    if output_dir:
+                        os.makedirs(output_dir, exist_ok=True)
+                        sep_kwargs = {"output_dir": output_dir, "log_level": log_level}
+                    else:
+                        sep_kwargs = {"log_level": log_level}
+
+                    if providers_list:
+                        sep_kwargs["providers"] = providers_list
+
+                    separator = Separator(**sep_kwargs)
+                except TypeError:
+                    # Fallback when Separator doesn't accept 'providers'
+                    if output_dir:
+                        os.makedirs(output_dir, exist_ok=True)
+                        separator = Separator(output_dir=output_dir, log_level=log_level)
+                    else:
+                        separator = Separator(log_level=log_level)
                 
                 # Load model (heavy op)
                 model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_HQ_3.onnx')
@@ -388,3 +433,58 @@ def clean_audio_for_chords(y: np.ndarray, sr: int) -> np.ndarray:
     y_filtered = filtfilt(b, a, y_harm)
     
     return y_filtered
+
+
+def separate_with_openvino_wrapper(input_file: str, output_dir: Optional[str] = None, model_path: Optional[str] = None, chunk_duration: int = 30) -> Optional[str]:
+    """Use the OpenVINOAudioSeparator wrapper to separate audio and return instrumental path.
+
+    This helper will copy the input into `output_dir` (if provided) and run the wrapper.
+    Returns path to instrumental stem or None on failure.
+    """
+    try:
+        import shutil
+
+        from backend.infrastructure.audio_separation.openvino_separator import (
+            OpenVINOAudioSeparator,
+        )
+
+        # Prepare working input path inside output_dir so outputs are created nearby
+        work_input = input_file
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
+            work_input = os.path.join(output_dir, os.path.basename(input_file))
+            shutil.copy2(input_file, work_input)
+
+        # Respect the single-use env var `USE_OPENVINO` which enables OpenVINO behavior
+        model = model_path or os.getenv('OPENVINO_MODEL_PATH') or os.getenv('OPENVINO_MODEL', None)
+        if not model:
+            # Default to converted model location inside image
+            model = os.path.join('/app/models_openvino', os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_HQ_3.onnx').rsplit('.', 1)[0] + '.xml')
+        device = os.getenv('OPENVINO_DEVICE', 'CPU')
+        precision = os.getenv('OPENVINO_PRECISION', 'FP16')
+
+        sep = OpenVINOAudioSeparator(model_path=model, device=device, precision=precision)
+        outputs = sep.separate(work_input, chunk_duration=chunk_duration)
+
+        inst = outputs.get('instrumental') or outputs.get('inst') or outputs.get('other')
+        if not inst:
+            # If keys are different, pick the one that contains 'inst' or not 'voc'
+            for v in outputs.values():
+                pn = str(v)
+                if 'voc' not in pn.lower():
+                    inst = pn
+                    break
+
+        if inst and output_dir:
+            # Ensure path is absolute in output_dir
+            inst_path = os.path.join(output_dir, os.path.basename(inst))
+            if os.path.exists(inst) and os.path.abspath(os.path.dirname(inst)) != os.path.abspath(output_dir):
+                shutil.move(inst, inst_path)
+            else:
+                inst_path = inst
+            return inst_path
+
+        return inst
+    except Exception as e:
+        print(f"⚠️ OpenVINO wrapper separation failed: {e}")
+        return None

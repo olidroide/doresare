@@ -1,0 +1,38 @@
+name: Convert ONNX → OpenVINO IR (FP16)
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
+      - name: Install dependencies for conversion
+        run: |
+          python -m pip install --no-cache-dir openvino openvino-dev onnx audio-separator
+
+      - name: Pre-download models (download_models.py)
+        run: |
+          python backend/download_models.py
+
+      - name: Convert model to OpenVINO IR (FP16)
+        run: |
+          chmod +x backend/scripts/convert_model_ci.sh
+          backend/scripts/convert_model_ci.sh UVR-MDX-NET-Inst_HQ_3.onnx backend/models_openvino || true
+
+      - name: Upload converted models as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: models_openvino
+          path: backend/models_openvino

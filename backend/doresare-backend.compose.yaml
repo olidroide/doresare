@@ -17,6 +17,7 @@ services:
       - .env.doresare-backend
     environment:
       - GRADIO_SERVER_NAME=0.0.0.0
+      - USE_OPENVINO=true
     restart: unless-stopped
     volumes:
        - ./hf_cache:/home/user/hf_cache
