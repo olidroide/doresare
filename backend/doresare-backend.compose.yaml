@@ -18,6 +18,23 @@ services:
     environment:
       - GRADIO_SERVER_NAME=0.0.0.0
       - USE_OPENVINO=true
+      - LIBVA_DRIVER_NAME=iHD
+      - MOVIEPY_USE_GPU=true
+      - MOVIEPY_FFMPEG_CODEC=h264_qsv
+      - MOVIEPY_FFMPEG_PARAMS=-init_hw_device qsv=hw -filter_hw_device qsv -global_quality 25
+    group_add:
+      - 105
+      - video
+    tmpfs:
+      - /tmp:size=4g
+    deploy:
+      resources:
+        limits:
+          memory: 6g
+          cpus: '3.0'
+        reservations:
+          memory: 2g
+          cpus: '0.5'
     restart: unless-stopped
     volumes:
        - ./hf_cache:/home/user/hf_cache

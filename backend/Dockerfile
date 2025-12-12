@@ -38,6 +38,19 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-install-project; \
     fi
 
+# If requested, install OpenVINO into the builder and convert ONNX -> OpenVINO IR
+# We run conversion in the builder stage so the final runtime image does NOT
+# contain the heavy OpenVINO Python packages. Use pip cache mount to speed up builds.
+COPY scripts/convert_model_ci.sh /tmp/convert_model_ci.sh
+RUN --mount=type=cache,target=/root/.cache/pip \
+    if [ "$USE_OPENVINO" = "true" ]; then \
+        echo "🚀 Converting ONNX -> OpenVINO IR in builder stage (using pip cache)..." && \
+        pip install --no-cache-dir openvino openvino-dev onnx || true && \
+        chmod +x /tmp/convert_model_ci.sh && \
+        /tmp/convert_model_ci.sh UVR-MDX-NET-Inst_HQ_3.onnx /app/models_openvino || true && \
+        rm -f /tmp/convert_model_ci.sh; \
+    fi
+
 # Stage 2: Runtime
 FROM python:3.12-slim-bookworm
 ARG USE_OPENVINO=false
@@ -55,6 +68,9 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
             ffmpeg \
             libsndfile1 \
             vainfo \
+            libva2 \
+            libva-drm2 \
+            libdrm2 \
             intel-media-va-driver \
             i965-va-driver \
             libmfx1 \
@@ -64,6 +80,9 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         apt-get install -y \
             ffmpeg \
             libsndfile1 \
+            libva2 \
+            libva-drm2 \
+            libdrm2 \
             ocl-icd-libopencl1; \
     fi
 
@@ -112,15 +131,8 @@ COPY --chown=user:user download_models.py .
 # Pre-download AI models during build (now cached separately)
 RUN python download_models.py
 
-# If requested, install OpenVINO and convert downloaded ONNX model to OpenVINO IR (FP16)
-COPY --chown=user:user scripts/convert_model_ci.sh /tmp/convert_model_ci.sh
-RUN if [ "$USE_OPENVINO" = "true" ]; then \
-    echo "🚀 Installing OpenVINO packages for model conversion..."; \
-    pip install --no-cache-dir openvino openvino-dev onnx || true; \
-    chmod +x /tmp/convert_model_ci.sh; \
-    /tmp/convert_model_ci.sh UVR-MDX-NET-Inst_HQ_3.onnx /app/models_openvino || true; \
-    rm -f /tmp/convert_model_ci.sh; \
-fi
+# Copy converted OpenVINO models (if produced in builder)
+COPY --from=builder --chown=user:user /app/models_openvino /app/models_openvino
 
 # Copy application code (everything else)
 COPY --chown=user:user . .

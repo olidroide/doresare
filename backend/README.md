@@ -130,18 +130,13 @@ This configuration:
 
 If you want the image to include an OpenVINO-converted model and use the OpenVINO wrapper at runtime, follow these steps:
 
-- Set build arg `USE_OPENVINO=true` when building the backend image so the Dockerfile will install OpenVINO tools and attempt to convert the downloaded ONNX model to OpenVINO IR (FP16).
 
 Example build command:
 ```bash
 docker build -t doresare-backend:openvino --build-arg USE_OPENVINO=true backend/
 ```
 
--- Environment variables: only `USE_OPENVINO` is required. If `USE_OPENVINO=true`, the runtime will:
 
-- Use the converted model at `/app/models_openvino/<model-name>.xml` by default (the Docker build step places it there when `USE_OPENVINO=true`).
-- Respect `OPENVINO_MODEL_PATH` if you need a custom path.
-- Use CPU by default and FP16 precision. To override device or precision, set `OPENVINO_DEVICE` and `OPENVINO_PRECISION` (optional).
 
 Example `.env`:
 ```bash
@@ -152,4 +147,39 @@ USE_OPENVINO=true
 # OPENVINO_PRECISION=FP16
 ```
 
-- The Dockerfile will try to locate the downloaded `UVR-MDX-NET-Inst_HQ_3.onnx` in common cache paths and convert it during build to `/app/models_openvino` using the Model Optimizer. If you prefer, pre-place the ONNX file in `backend/models/` so the conversion step can find it deterministically.
+
+
+## Enabling Intel Quick Sync (QSV) safely
+
+If you want to enable hardware-accelerated encoding using Intel Quick Sync (QSV), follow these steps. By default the runtime image uses safe CPU-only defaults.
+
+1. Verify host support:
+```bash
+ls -l /dev/dri
+vainfo
+```
+If `vainfo` shows `iHD_drv_video.so`, prefer `LIBVA_DRIVER_NAME=iHD`. If it lists `i965`, use `i965`.
+
+2. Build the image with OpenVINO conversion (optional):
+```bash
+DOCKER_BUILDKIT=1 docker build -t doresare-backend:openvino --build-arg USE_OPENVINO=true backend/
+```
+
+3. Run the compose entry that exposes the render node (example already provided in `doresare-backend.compose.yaml`):
+```bash
+docker compose -f backend/doresare-backend.compose.yaml up --build
+```
+
+4. Quick runtime checks inside the container:
+```bash
+docker exec -it doresare-backend bash
+vainfo
+ffmpeg -hide_banner -init_hw_device qsv=hw -hwaccel qsv -hwaccel_output_format qsv -version
+```
+
+Notes & tips:
+- If `ffmpeg -init_hw_device qsv=hw` fails with "Generic error in an external library", try switching `LIBVA_DRIVER_NAME` between `iHD` and `i965` and ensure the host kernel exposes `/dev/dri/renderD128`.
+- Use `tmpfs` and at least 4GB memory for the container to stabilize QSV allocation (see `doresare-backend.compose.yaml`).
+- The Dockerfile converts ONNX -> OpenVINO during the builder stage (faster subsequent builds with pip cache). The final image does not include heavy OpenVINO Python packages unless you explicitly install them at runtime.
+
+If you want, the repository can be updated to set `MOVIEPY_USE_GPU=false` by default (safer) and provide a one-line toggle in `.env.doresare-backend` to enable GPU when the host is validated.
