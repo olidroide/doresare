@@ -48,13 +48,24 @@ RUN rm -f /etc/apt/apt.conf.d/docker-clean; echo 'Binary::apt::APT::Keep-Downloa
 # Install runtime dependencies
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
-    apt-get update && apt-get install -y \
-    ffmpeg \
-    libsndfile1 \
-    intel-media-va-driver \
-    libmfx1 \
-    vainfo \
-    ocl-icd-libopencl1
+    apt-get update && \
+    if [ "$USE_OPENVINO" = "true" ]; then \
+        echo "🔧 Installing VA drivers and diagnostics for OpenVINO/QSV..." && \
+        apt-get install -y \
+            ffmpeg \
+            libsndfile1 \
+            vainfo \
+            intel-media-va-driver-non-free \
+            i965-va-driver \
+            libmfx1 \
+            ocl-icd-libopencl1; \
+    else \
+        echo "ℹ️ Installing runtime minimal packages (no OpenVINO)..." && \
+        apt-get install -y \
+            ffmpeg \
+            libsndfile1 \
+            ocl-icd-libopencl1; \
+    fi
 
 # Set up non-root user for Hugging Face Spaces
 # Add to video and render groups for hardware access
@@ -69,6 +80,8 @@ ENV HOME=/home/user \
     ORT_DISABLE_TELEMETRY=1 \
     SKIP_AUDIO_SEPARATION=false \
     AUDIO_SEPARATION_TIMEOUT=300
+# If you use QSV at runtime, set LIBVA_DRIVER_NAME to the appropriate driver (iHD or i965)
+# Example: -e LIBVA_DRIVER_NAME=iHD
 
 # Audio Separation Model Configuration:
 # - UVR-MDX-NET-Inst_HQ_3.onnx (default, faster, ~30s, recommended for low-power CPUs)
