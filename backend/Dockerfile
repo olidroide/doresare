@@ -55,7 +55,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
             ffmpeg \
             libsndfile1 \
             vainfo \
-            intel-media-va-driver-non-free \
+            intel-media-va-driver \
             i965-va-driver \
             libmfx1 \
             ocl-icd-libopencl1; \
