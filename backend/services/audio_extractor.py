@@ -443,11 +443,8 @@ def separate_with_openvino_wrapper(input_file: str, output_dir: Optional[str] = 
     """
     try:
         import shutil
-
-        from backend.infrastructure.audio_separation.openvino_separator import (
-            OpenVINOAudioSeparator,
-        )
-
+        from infrastructure.audio_separation.openvino_separator import OpenVINOAudioSeparator
+        
         # Prepare working input path inside output_dir so outputs are created nearby
         work_input = input_file
         if output_dir:
