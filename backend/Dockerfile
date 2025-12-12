@@ -51,6 +51,9 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         rm -f /tmp/convert_model_ci.sh; \
     fi
 
+# Ensure models_openvino exists so runtime-stage COPY won't fail if conversion skipped
+RUN mkdir -p /app/models_openvino
+
 # Stage 2: Runtime
 FROM python:3.12-slim-bookworm
 ARG USE_OPENVINO=false
