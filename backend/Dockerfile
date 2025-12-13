@@ -15,7 +15,9 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     apt-get update && apt-get install -y \
     build-essential \
-    python3-dev
+    python3-dev \
+    ffmpeg \
+    libsndfile1
 
 # Copy dependency files first for caching
 COPY pyproject.toml .
