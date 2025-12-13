@@ -673,24 +673,38 @@ def render_video_with_overlays(analysis: VideoAnalysis, progress=None, start_pct
 
             # QSV Requirement: Force NV12 pixel format for hardware encoding
             # MoviePy usually outputs RGB, which QSV cannot consume directly without conversion
+            # Extra params via env var (space separated)
+            # e.g. "-global_quality 25 -look_ahead 1"
+            extra_params = os.getenv("MOVIEPY_FFMPEG_PARAMS", "")
+            
+            # Check if user has manually configured hardware device init
+            user_has_init_hw = "-init_hw_device" in extra_params
+            
             # QSV Requirement: Force NV12 pixel format and upload to hardware
             # MoviePy pipes raw SW frames. We must upload them to QSV memory.
             # 'extra_hw_frames=64' is CRITICAL for QSV stability to avoid "fixed frame pool size" errors.
             if "qsv" in codec:
-                print("🔧 Detected QSV codec: Using minimal user-defined params (qsv=hw, veryfast)")
-                # Minimal configuration requested by user
-                # Note: MoviePy inputs are software frames, so we MUST upload them.
-                ffmpeg_params.extend(['-init_hw_device', 'qsv=hw', '-filter_hw_device', 'qsv'])
-                ffmpeg_params.extend(['-vf', 'format=nv12,hwupload'])
-            # For NVENC, -pix_fmt nv12 (or yuv420p) is usually enough, but let's stick to simple for now.
-            # For NVENC, -pix_fmt nv12 (or yuv420p) is usually enough, but let's stick to simple for now.
+                if user_has_init_hw:
+                     print("🔧 Detected QSV codec with CUSTOM user init params. Skipping default QSV initialization.")
+                     # We assume the user knows what they are doing with -init_hw_device
+                     # But we might still need the filter loop if not provided?
+                     # Safest is to rely on user params if they provided init_hw_device
+                else:
+                    # Detect render device for explicit initialization (fixes 'Cannot allocate memory' on some setups)
+                    qsv_device = 'qsv=hw'
+                    if os.path.exists('/dev/dri/renderD128'):
+                        qsv_device = 'qsv=hw:/dev/dri/renderD128'
+                        print(f"🔧 QSV: Found render device, using explicit init: {qsv_device}")
+                    else:
+                        print(f"🔧 QSV: Render device not found, using generic init: {qsv_device}")
+                        
+                    print(f"🔧 Detected QSV codec: Using params ({qsv_device}, nv12, hwupload)")
+                    ffmpeg_params.extend(['-init_hw_device', qsv_device, '-filter_hw_device', 'qsv'])
+                    ffmpeg_params.extend(['-vf', 'format=nv12,hwupload=extra_hw_frames=64'])
+
             elif "nvenc" in codec:
                  ffmpeg_params.extend(['-pix_fmt', 'yuv420p']) # Safe default for NVENC compatibility
 
-                
-            # Extra params via env var (space separated)
-            # e.g. "-global_quality 25 -look_ahead 1"
-            extra_params = os.getenv("MOVIEPY_FFMPEG_PARAMS", "")
             if extra_params:
                 # Use the helper to normalize and merge params safely
                 normalized = _normalize_ffmpeg_params(extra_params, existing_params=ffmpeg_params)
