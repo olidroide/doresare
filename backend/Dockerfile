@@ -165,7 +165,8 @@ COPY --chown=user:user assets assets
 COPY --chown=user:user download_models.py .
 
 # Pre-download AI models during build (now cached separately)
-RUN python download_models.py
+RUN python download_models.py && \
+    chown -R user:user $AUDIO_SEPARATOR_MODEL_DIR
 
 # Copy converted OpenVINO models (if produced in builder)
 COPY --from=builder --chown=user:user /app/models_openvino /app/models_openvino

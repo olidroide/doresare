@@ -180,9 +180,9 @@ def load_global_model():
         # env var (set above) will tell ONNX Runtime to use the OpenVINO provider.
         model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_HQ_3.onnx')
         model_dir = os.getenv('AUDIO_SEPARATOR_MODEL_DIR', '/home/user/models')
-        model_path = os.path.join(model_dir, model_name)
-        print(f"🧠 Loading global AI model: {model_path} (Log Level: {log_level_str})...")
-        _global_separator.load_model(model_filename=model_path)
+        # Revert: pass just the name, let library look in model_dir
+        print(f"🧠 Loading global AI model: {model_name} (Log Level: {log_level_str})...")
+        _global_separator.load_model(model_filename=model_name)
         print("✅ Global AI separation model loaded successfully.")
         
     except Exception as e:
@@ -268,9 +268,8 @@ def separate_audio_ai(
                 
                 # Load model (heavy op)
                 model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_HQ_3.onnx')
-                model_path = os.path.join(model_dir, model_name)
-                print(f"🧠 Loading specific model: {model_path}")
-                separator.load_model(model_filename=model_path)
+                print(f"🧠 Loading specific model: {model_name}")
+                separator.load_model(model_filename=model_name)
                 using_global = False
             
             # Wrapper to update shared progress state with logging
