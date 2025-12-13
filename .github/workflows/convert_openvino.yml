@@ -29,7 +29,7 @@ jobs:
       - name: Convert model to OpenVINO IR (FP16)
         run: |
           chmod +x backend/scripts/convert_model_ci.sh
-          backend/scripts/convert_model_ci.sh UVR-MDX-NET-Inst_Main.onnx backend/models_openvino || true
+          backend/scripts/convert_model_ci.sh Kim_Vocal_2.onnx backend/models_openvino || true
 
       - name: Upload converted models as artifact
         uses: actions/upload-artifact@v4
