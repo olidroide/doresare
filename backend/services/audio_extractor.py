@@ -212,7 +212,7 @@ def load_global_model():
             _global_separator = Separator(**sep_kwargs)
         
         # Validate model file existence and integrity
-        model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_HQ_3.onnx')
+        model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'Kim_Vocal_2.onnx')
         model_path = os.path.join(model_dir, model_name)
         if os.path.exists(model_path):
             file_size = os.path.getsize(model_path)
@@ -321,7 +321,7 @@ def separate_audio_ai(
                 separator = Separator(**sep_kwargs)
                 
                 # Load model (heavy op)
-                model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_HQ_3.onnx')
+                model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_Main.onnx')
                 print(f"🧠 Loading specific model: {model_name}")
                 separator.load_model(model_filename=model_name)
                 using_global = False
@@ -530,7 +530,7 @@ def separate_with_openvino_wrapper(input_file: str, output_dir: Optional[str] = 
         model = model_path or os.getenv('OPENVINO_MODEL_PATH') or os.getenv('OPENVINO_MODEL', None)
         if not model:
             # Default to converted model location inside image
-            model = os.path.join('/app/models_openvino', os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_HQ_3.onnx').rsplit('.', 1)[0] + '.xml')
+            model = os.path.join('/app/models_openvino', os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_Main.onnx').rsplit('.', 1)[0] + '.xml')
         device = os.getenv('OPENVINO_DEVICE', 'CPU')
         precision = os.getenv('OPENVINO_PRECISION', 'FP16')
 

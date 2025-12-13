@@ -4,7 +4,7 @@ set -euo pipefail
 # Script: convert_model_ci.sh
 # Usage: convert_model_ci.sh <model_filename.onnx> <output_dir>
 
-MODEL_NAME=${1:-UVR-MDX-NET-Inst_HQ_3.onnx}
+MODEL_NAME=${1:-UVR-MDX-NET-Inst_Main.onnx}
 OUTDIR=${2:-backend/models_openvino}
 
 echo "🔍 Searching for model: ${MODEL_NAME}"
