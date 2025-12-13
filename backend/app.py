@@ -1,6 +1,10 @@
 import os
 import sys
 
+# Force unbuffered output for debugging in Docker
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
+
 # Add project root to path to allow absolute imports
 # sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
