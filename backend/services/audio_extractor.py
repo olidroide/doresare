@@ -448,11 +448,16 @@ def separate_with_openvino_wrapper(input_file: str, output_dir: Optional[str] = 
         from infrastructure.audio_separation.openvino_separator import OpenVINOAudioSeparator
         
         # Prepare working input path inside output_dir so outputs are created nearby
+        # Prepare working input path inside output_dir so outputs are created nearby
         work_input = input_file
         if output_dir:
             os.makedirs(output_dir, exist_ok=True)
-            work_input = os.path.join(output_dir, os.path.basename(input_file))
-            shutil.copy2(input_file, work_input)
+            candidate_work_input = os.path.join(output_dir, os.path.basename(input_file))
+            if os.path.abspath(input_file) != os.path.abspath(candidate_work_input):
+                 shutil.copy2(input_file, candidate_work_input)
+                 work_input = candidate_work_input
+            else:
+                 work_input = input_file
 
         # Respect the single-use env var `USE_OPENVINO` which enables OpenVINO behavior
         model = model_path or os.getenv('OPENVINO_MODEL_PATH') or os.getenv('OPENVINO_MODEL', None)
