@@ -220,6 +220,17 @@ def load_global_model():
         # Validate model file existence and integrity
         # Using Kim_Vocal_2.onnx (lighter)
         model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'Kim_Vocal_2.onnx')
+        
+        # J3455 SAFETY OVERRIDE:
+        # If user accidentally configured a heavy model, force switch to Kim_Vocal_2
+        if 'HQ_3' in model_name or 'Inst_Main' in model_name:
+            print(f"⚠️ DETECTED HEAVY MODEL CONFIGURATION: {model_name}")
+            print("🚀 FORCING 'Kim_Vocal_2.onnx' override for J3455 performance optimization!")
+            model_name = 'Kim_Vocal_2.onnx'
+            
+        if not model_name.endswith('.onnx'):
+            model_name += '.onnx'
+            
         model_path = os.path.join(model_dir, model_name)
         if os.path.exists(model_path):
             file_size = os.path.getsize(model_path)
