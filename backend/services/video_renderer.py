@@ -702,6 +702,15 @@ def render_video_with_overlays(analysis: VideoAnalysis, progress=None, start_pct
                     ffmpeg_params.extend(['-init_hw_device', qsv_device, '-filter_hw_device', 'qsv'])
                     ffmpeg_params.extend(['-vf', 'format=nv12,hwupload=extra_hw_frames=64'])
 
+            elif "vaapi" in codec:
+                 if user_has_init_hw:
+                     print("🔧 Detected VAAPI codec with CUSTOM user init params.")
+                 else:
+                     va_device = 'vaapi=prior_va:/dev/dri/renderD128' if os.path.exists('/dev/dri/renderD128') else 'vaapi=prior_va'
+                     print(f"🔧 Detected VAAPI codec: Using params ({va_device}, nv12, hwupload)")
+                     ffmpeg_params.extend(['-init_hw_device', va_device, '-filter_hw_device', 'prior_va'])
+                     ffmpeg_params.extend(['-vf', 'format=nv12,hwupload'])
+
             elif "nvenc" in codec:
                  ffmpeg_params.extend(['-pix_fmt', 'yuv420p']) # Safe default for NVENC compatibility
 
