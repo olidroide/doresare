@@ -130,7 +130,7 @@ ENV HOME=/home/user \
     ORT_DISABLE_TELEMETRY=1 \
     SKIP_AUDIO_SEPARATION=false \
     AUDIO_SEPARATION_TIMEOUT=300 \
-    AUDIO_SEPARATOR_MODEL_DIR=/app/models
+    AUDIO_SEPARATOR_MODEL_DIR=/home/user/models
 
 # Create model directory and ensure ownership
 RUN mkdir -p $AUDIO_SEPARATOR_MODEL_DIR && \

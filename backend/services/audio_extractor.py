@@ -159,7 +159,13 @@ def load_global_model():
             providers_list = [p.strip() for p in opts_providers.split(',') if p.strip()] if opts_providers else None
             
             # Use explicit model dir if configured
-            model_dir = os.getenv('AUDIO_SEPARATOR_MODEL_DIR', '/app/models')
+            model_dir = os.getenv('AUDIO_SEPARATOR_MODEL_DIR', '/home/user/models')
+            print(f"📂 Checking model directory: {model_dir}")
+            if os.path.exists(model_dir):
+                print(f"📄 Files in model dir: {os.listdir(model_dir)}")
+            else:
+                print(f"⚠️ Model directory does not exist: {model_dir}")
+
             sep_kwargs = {"output_dir": _global_separator_output_dir, "log_level": log_level, "model_file_dir": model_dir}
             
             if providers_list:
@@ -169,7 +175,6 @@ def load_global_model():
             # Fallback if the Separator constructor signature doesn't accept our kwargs
             _global_separator = Separator(output_dir=_global_separator_output_dir, log_level=log_level)
         
-        # Load the model explicitly (heavy operation - do once)
         # Load the model explicitly (heavy operation - do once)
         # We always load the ONNX model. If OpenVINO is enabled, the ONNXRUNTIME_EXECUTION_PROVIDERS
         # env var (set above) will tell ONNX Runtime to use the OpenVINO provider.
@@ -239,7 +244,7 @@ def separate_audio_ai(
                 # Try to pass providers list to Separator if supported
                 try:
                     providers_list = [p.strip() for p in providers_env.split(',') if p.strip()] if providers_env else None
-                    model_dir = os.getenv('AUDIO_SEPARATOR_MODEL_DIR', '/app/models')
+                    model_dir = os.getenv('AUDIO_SEPARATOR_MODEL_DIR', '/home/user/models')
                     
                     if output_dir:
                         os.makedirs(output_dir, exist_ok=True)

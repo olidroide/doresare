@@ -20,7 +20,7 @@ try:
     
     # Initialize separator
     # This will download the model to the valid cache directory
-    model_dir = os.getenv('AUDIO_SEPARATOR_MODEL_DIR', '/app/models')
+    model_dir = os.getenv('AUDIO_SEPARATOR_MODEL_DIR', '/home/user/models')
     os.makedirs(model_dir, exist_ok=True)
     
     separator = Separator(log_level=logging.INFO, model_file_dir=model_dir)
