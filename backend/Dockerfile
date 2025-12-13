@@ -53,8 +53,16 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         /app/.venv/bin/python download_models.py || true; \
         echo "🚀 Converting ONNX -> OpenVINO IR in builder stage (using pip cache)..." && \
         /app/.venv/bin/pip install --no-cache-dir openvino openvino-dev onnx || true && \
-        chmod +x /tmp/convert_model_ci.sh && \
-        /tmp/convert_model_ci.sh UVR-MDX-NET-Inst_HQ_3.onnx /app/models_openvino || true && \
+        # locate the downloaded ONNX model (search common cache locations), then convert if found
+        MODEL_NAME="UVR-MDX-NET-Inst_HQ_3.onnx"; \
+        MODEL_PATH=$(/bin/bash -lc "find / -type f -name \"${MODEL_NAME}\" -print -quit 2>/dev/null || true"); \
+        if [ -n \"${MODEL_PATH}\" ]; then \
+            echo "✅ Found ONNX model at: ${MODEL_PATH}"; \
+            /app/.venv/bin/python -m openvino.tools.mo --input_model "${MODEL_PATH}" --compress_to_fp16 --output_dir /app/models_openvino || true; \
+            echo "✅ Converted artifacts in: /app/models_openvino"; \
+        else \
+            echo "⚠️ Could not locate ${MODEL_NAME}; skipping conversion."; \
+        fi && \
         rm -f /tmp/convert_model_ci.sh; \
     else \
         echo "ℹ️ Skipping OpenVINO conversion in builder"; \
