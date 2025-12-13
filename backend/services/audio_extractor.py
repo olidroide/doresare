@@ -250,8 +250,9 @@ def load_global_model():
         # FORCE DEBUG LOGGING to find out why it redownloads
         print(f"🧠 Loading global AI model: {model_name} (forcing DEBUG log level)...")
         # OPTIMIZATION: Small chunks for J3455 (Option 3)
-        print("🔧 Optimization: Setting mdx_params (segment_size=128, batch_size=1) for Low RAM/CPU")
-        mdx_params = {"segment_size": 128, "batch_size": 1}
+        # Note: segment_size=128 caused crash. Reverting to default (256) but keeping batch_size=1.
+        print("🔧 Optimization: Setting mdx_params (batch_size=1) for Low RAM/CPU")
+        mdx_params = {"batch_size": 1}
         _global_separator = Separator(output_dir=_global_separator_output_dir, log_level=logging.DEBUG, model_file_dir=model_dir, mdx_params=mdx_params)
         _global_separator.load_model(model_filename=model_name)
         print("✅ Global AI separation model loaded successfully.")
@@ -340,7 +341,8 @@ def separate_audio_ai(
                     sep_kwargs = {"log_level": log_level, "model_file_dir": model_dir}
 
                 # OPTIMIZATION: Small chunks for J3455
-                sep_kwargs["mdx_params"] = {"segment_size": 128, "batch_size": 1}
+                # Note: segment_size=128 caused crash. Keeping batch_size=1.
+                sep_kwargs["mdx_params"] = {"batch_size": 1}
 
                 separator = Separator(**sep_kwargs)
                 
