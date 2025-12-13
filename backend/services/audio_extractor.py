@@ -176,6 +176,7 @@ def load_global_model():
             _global_separator = Separator(output_dir=_global_separator_output_dir, log_level=log_level)
         
         # Validate model file existence and integrity
+        model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_HQ_3.onnx')
         model_path = os.path.join(model_dir, model_name)
         if os.path.exists(model_path):
             file_size = os.path.getsize(model_path)
