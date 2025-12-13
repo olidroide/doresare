@@ -250,7 +250,9 @@ def load_global_model():
         # FORCE DEBUG LOGGING to find out why it redownloads
         print(f"🧠 Loading global AI model: {model_name} (forcing DEBUG log level)...")
         _global_separator = Separator(output_dir=_global_separator_output_dir, log_level=logging.DEBUG, model_file_dir=model_dir)
-        _global_separator.load_model(model_filename=model_name)
+        # OPTIMIZATION: Small chunks for J3455 (Option 3)
+        print("🔧 Optimization: Setting mdx_segment_size=128, mdx_batch_size=1 for Low RAM/CPU")
+        _global_separator.load_model(model_filename=model_name, mdx_segment_size=128, mdx_batch_size=1)
         print("✅ Global AI separation model loaded successfully.")
         
     except Exception as e:
@@ -340,8 +342,19 @@ def separate_audio_ai(
                 
                 # Load model (heavy op)
                 model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'Kim_Vocal_2.onnx')
+                
+                # J3455 SAFETY OVERRIDE (Per-request instance)
+                if 'HQ_3' in model_name or 'Inst_Main' in model_name:
+                    print(f"⚠️ DETECTED HEAVY MODEL CONFIGURATION (Per-request): {model_name}")
+                    print("🚀 FORCING 'Kim_Vocal_2.onnx' override!")
+                    model_name = 'Kim_Vocal_2.onnx'
+                    
+                if not model_name.endswith('.onnx'):
+                    model_name += '.onnx'
+
                 print(f"🧠 Loading specific model: {model_name}")
-                separator.load_model(model_filename=model_name)
+                # OPTIMIZATION: Small chunks for J3455
+                separator.load_model(model_filename=model_name, mdx_segment_size=128, mdx_batch_size=1)
                 using_global = False
             
             # Wrapper to update shared progress state with logging
