@@ -9,6 +9,34 @@ from typing import Optional
 import librosa
 import numpy as np
 
+# --- MONKEY PATCH INIT ---
+try:
+    import onnxruntime as ort
+    _original_inference_session = ort.InferenceSession
+
+    class PatchedInferenceSession(_original_inference_session):
+        def __init__(self, path_or_bytes, **kwargs):
+            # Auto-detect OpenVINO
+            available = ort.get_available_providers()
+            if 'OpenVINOExecutionProvider' in available:
+                # Force OpenVINO if the caller tries to default to CPU or provides nothing
+                current_providers = kwargs.get('providers', [])
+                if not current_providers or current_providers == ['CPUExecutionProvider']:
+                    if os.path.exists('/dev/dri'):
+                        print(f"🐵 MONKEY PATCH: Forcing OpenVINOExecutionProvider for model!")
+                        kwargs['providers'] = ['OpenVINOExecutionProvider', 'CPUExecutionProvider']
+                    else:
+                        print("🐵 MONKEY PATCH: OpenVINO detected but /dev/dri missing. Falling back to CPU.")
+            
+            super().__init__(path_or_bytes, **kwargs)
+
+    # Apply patch
+    ort.InferenceSession = PatchedInferenceSession
+    print("🐵 ONNX Runtime InferenceSession has been patched to force OpenVINO.")
+except ImportError:
+    pass
+# -------------------------
+
 # Global variables for singleton model
 _global_separator = None
 _global_separator_output_dir = None
