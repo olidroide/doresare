@@ -44,6 +44,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY scripts/convert_model_ci.sh /tmp/convert_model_ci.sh
 # Copy minimal files required to download models into builder stage
 COPY services/font_manager.py services/
+COPY assets assets
 COPY download_models.py .
 
 RUN --mount=type=cache,target=/root/.cache/pip \
