@@ -42,13 +42,22 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # We run conversion in the builder stage so the final runtime image does NOT
 # contain the heavy OpenVINO Python packages. Use pip cache mount to speed up builds.
 COPY scripts/convert_model_ci.sh /tmp/convert_model_ci.sh
+# Copy minimal files required to download models into builder stage
+COPY services/font_manager.py services/
+COPY download_models.py .
+
 RUN --mount=type=cache,target=/root/.cache/pip \
+    --mount=type=cache,target=/root/.cache/uv \
     if [ "$USE_OPENVINO" = "true" ]; then \
+        echo "⬇️ Pre-downloading models in builder stage..." && \
+        /app/.venv/bin/python download_models.py || true; \
         echo "🚀 Converting ONNX -> OpenVINO IR in builder stage (using pip cache)..." && \
-        pip install --no-cache-dir openvino openvino-dev onnx || true && \
+        /app/.venv/bin/pip install --no-cache-dir openvino openvino-dev onnx || true && \
         chmod +x /tmp/convert_model_ci.sh && \
         /tmp/convert_model_ci.sh UVR-MDX-NET-Inst_HQ_3.onnx /app/models_openvino || true && \
         rm -f /tmp/convert_model_ci.sh; \
+    else \
+        echo "ℹ️ Skipping OpenVINO conversion in builder"; \
     fi
 
 # Ensure models_openvino exists so runtime-stage COPY won't fail if conversion skipped
