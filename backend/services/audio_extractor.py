@@ -175,13 +175,25 @@ def load_global_model():
             # Fallback if the Separator constructor signature doesn't accept our kwargs
             _global_separator = Separator(output_dir=_global_separator_output_dir, log_level=log_level)
         
-        # Load the model explicitly (heavy operation - do once)
-        # We always load the ONNX model. If OpenVINO is enabled, the ONNXRUNTIME_EXECUTION_PROVIDERS
-        # env var (set above) will tell ONNX Runtime to use the OpenVINO provider.
-        model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_HQ_3.onnx')
-        model_dir = os.getenv('AUDIO_SEPARATOR_MODEL_DIR', '/home/user/models')
-        # Revert: pass just the name, let library look in model_dir
-        print(f"🧠 Loading global AI model: {model_name} (Log Level: {log_level_str})...")
+        # Validate model file existence and integrity
+        if os.path.exists(model_path):
+            file_size = os.path.getsize(model_path)
+            print(f"📊 Model file exists. Size: {file_size / 1024 / 1024:.2f} MB")
+            # Calculate partial MD5 for debugging
+            try:
+                import hashlib
+                with open(model_path, 'rb') as f:
+                    # Read first 1MB for quick check or full? Let's do partial to be fast
+                    file_hash = hashlib.md5(f.read(1024*1024)).hexdigest()
+                    print(f"🔑 Model file partial MD5 (first 1MB): {file_hash}")
+            except Exception as e:
+                print(f"⚠️ Could not hash model file: {e}")
+        else:
+            print(f"❌ Model file MISSING at: {model_path}")
+
+        # FORCE DEBUG LOGGING to find out why it redownloads
+        print(f"🧠 Loading global AI model: {model_name} (forcing DEBUG log level)...")
+        _global_separator = Separator(output_dir=_global_separator_output_dir, log_level=logging.DEBUG, model_file_dir=model_dir)
         _global_separator.load_model(model_filename=model_name)
         print("✅ Global AI separation model loaded successfully.")
         
