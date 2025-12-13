@@ -49,20 +49,27 @@ COPY download_models.py .
 RUN --mount=type=cache,target=/root/.cache/pip \
     --mount=type=cache,target=/root/.cache/uv \
     if [ "$USE_OPENVINO" = "true" ]; then \
-        echo "⬇️ Pre-downloading models in builder stage..." && \
-        /app/.venv/bin/python download_models.py || true; \
-        echo "🚀 Converting ONNX -> OpenVINO IR in builder stage (using pip cache)..." && \
-        /app/.venv/bin/pip install --no-cache-dir openvino openvino-dev onnx || true && \
-        # locate the downloaded ONNX model (search common cache locations), then convert if found
+        set -e; \
+        echo "⬇️ Pre-downloading models in builder stage..."; \
+        /app/.venv/bin/python download_models.py; \
+        echo "🚀 Converting ONNX -> OpenVINO IR in builder stage (using pip cache)..."; \
+        /app/.venv/bin/pip install --no-cache-dir openvino openvino-dev onnx; \
+        # locate the downloaded ONNX model (search common cache locations), then convert if found \
         MODEL_NAME="UVR-MDX-NET-Inst_HQ_3.onnx"; \
-        MODEL_PATH=$(/bin/bash -lc "find / -type f -name \"${MODEL_NAME}\" -print -quit 2>/dev/null || true"); \
-        if [ -n \"${MODEL_PATH}\" ]; then \
+        echo "🔍 Searching for ${MODEL_NAME}..." && \
+        MODEL_PATH=$(find /root /app -name "${MODEL_NAME}" -type f -print -quit 2>/dev/null); \
+        if [ -z "$MODEL_PATH" ]; then \
+             echo "⚠️ Model not found in specific paths, searching /..." && \
+             MODEL_PATH=$(find / -name "${MODEL_NAME}" -type f -print -quit 2>/dev/null); \
+        fi; \
+        if [ -n "$MODEL_PATH" ]; then \
             echo "✅ Found ONNX model at: ${MODEL_PATH}"; \
-            /app/.venv/bin/python -m openvino.tools.mo --input_model "${MODEL_PATH}" --compress_to_fp16 --output_dir /app/models_openvino || true; \
+            /app/.venv/bin/python -m openvino.tools.mo --input_model "${MODEL_PATH}" --compress_to_fp16 --output_dir /app/models_openvino; \
             echo "✅ Converted artifacts in: /app/models_openvino"; \
         else \
-            echo "⚠️ Could not locate ${MODEL_NAME}; skipping conversion."; \
-        fi && \
+            echo "❌ Could not locate ${MODEL_NAME}; failing build."; \
+            exit 1; \
+        fi; \
         rm -f /tmp/convert_model_ci.sh; \
     else \
         echo "ℹ️ Skipping OpenVINO conversion in builder"; \
