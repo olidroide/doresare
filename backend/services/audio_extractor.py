@@ -164,18 +164,24 @@ def load_global_model():
             print(f"⚠️ Model directory does not exist: {model_dir}")
 
         sep_kwargs = {"output_dir": _global_separator_output_dir, "log_level": log_level, "model_file_dir": model_dir}
-
-        # Just set the environment variable regardless, as a backup, and log it
+        
+        # Use detected providers if any
         if detected_providers:
-             print(f"🚀 Configuring ONNX environment with providers: {detected_providers}")
-             os.environ['ONNXRUNTIME_EXECUTION_PROVIDERS'] = ','.join(detected_providers)
-             # Note: audio-separator typically reads os.environ['ONNXRUNTIME_EXECUTION_PROVIDERS'] internally
+            print(f"🚀 Configuring Separator with providers: {detected_providers}")
+            os.environ['ONNXRUNTIME_EXECUTION_PROVIDERS'] = ','.join(detected_providers)
+            # audio-separator >= 0.17 supports 'providers' arg (not sure of exact version, but try/except handles it)
+            sep_kwargs["providers"] = detected_providers
 
         try:
             _global_separator = Separator(**sep_kwargs)
         except TypeError:
-            # Fallback if the Separator constructor signature doesn't accept our kwargs
-            _global_separator = Separator(output_dir=_global_separator_output_dir, log_level=log_level)
+            # Fallback if the Separator constructor signature doesn't accept 'providers'
+            # We already set the env var, so just init without kwarg
+            print("⚠️ Separator does not accept 'providers' kwarg. Relying on ONNXRUNTIME_EXECUTION_PROVIDERS env var.")
+            # Remove providers from kwargs and retry
+            if "providers" in sep_kwargs:
+                del sep_kwargs["providers"]
+            _global_separator = Separator(**sep_kwargs)
         
         # Validate model file existence and integrity
         model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_HQ_3.onnx')
