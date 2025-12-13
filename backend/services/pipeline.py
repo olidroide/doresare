@@ -86,26 +86,14 @@ def generate_video(input_file: str, file_manager: FileManager, progress=None, cl
             
             def run_separation():
                 try:
-                    # Allow using the OpenVINO wrapper if USE_OPENVINO=true
-                    use_openvino = os.getenv('USE_OPENVINO', 'false').lower() == 'true'
-                    if use_openvino:
-                        print('🧩 Using OpenVINO mode for separation')
-                        # Default converted model path inside the image
-                        default_xml = '/app/models_openvino/' + os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_HQ_3.onnx').rsplit('.', 1)[0] + '.xml'
-                        model_path = os.getenv('OPENVINO_MODEL_PATH', default_xml)
-                        stem_file = audio_extractor.separate_with_openvino_wrapper(
-                            audio_file,
-                            output_dir=work_dir,
-                            model_path=model_path,
-                            chunk_duration=int(os.getenv('OPENVINO_CHUNK_SECONDS', '30'))
-                        )
-                    else:
-                        stem_file = audio_extractor.separate_audio_ai(
-                            audio_file,
-                            output_dir=work_dir,
-                            progress_callback=None,  # We'll handle progress in main thread
-                            timeout_seconds=separation_timeout
-                        )
+                    # Unified path: separate_audio_ai handles usage of global model,
+                    # output directory management, and ONNX Runtime providers (including OpenVINO)
+                    stem_file = audio_extractor.separate_audio_ai(
+                        audio_file,
+                        output_dir=work_dir,
+                        progress_callback=None,  # We'll handle progress in main thread
+                        timeout_seconds=separation_timeout
+                    )
                     separation_result['stem_file'] = stem_file
                 except Exception as e:
                     print(f"❌ Exception in separation thread: {e}")
