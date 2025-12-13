@@ -125,51 +125,53 @@ def load_global_model():
         _global_separator_output_dir = os.path.join(tempfile.gettempdir(), "doresare_global_separator")
         os.makedirs(_global_separator_output_dir, exist_ok=True)
         
-        # If an ONNXRUNTIME provider is requested in env, try to configure onnxruntime
-        providers_env = os.getenv('ONNXRUNTIME_EXECUTION_PROVIDERS')
-        if providers_env:
-            try:
-                import onnxruntime as ort
-                requested_providers = [p.strip() for p in providers_env.split(',') if p.strip()]
-                available_providers = ort.get_available_providers()
-                matched = [p for p in requested_providers if p in available_providers]
-                if matched:
-                    print(f"🚀 Detected requested ONNX Runtime providers available: {matched}")
-                    # Export matched to env (some libs read this var)
-                    os.environ['ONNXRUNTIME_EXECUTION_PROVIDERS'] = ','.join(matched)
+        # Detect available providers automatically
+        detected_providers = []
+        try:
+            import onnxruntime as ort
+            available = ort.get_available_providers()
+            print(f"🔎 Available ONNX Runtime providers: {available}")
+            
+            # Prioritize OpenVINO if available
+            if 'OpenVINOExecutionProvider' in available:
+                detected_providers.append('OpenVINOExecutionProvider')
+                # Check for GPU device access
+                if not os.path.exists('/dev/dri'):
+                    print("⚠️ OpenVINO is available but /dev/dri is missing. GPU acceleration will NOT work. Expect slow CPU performance on J3455.")
                 else:
-                    print(f"⚠️ Requested ONNX providers {requested_providers} not found. Available: {available_providers}")
-                    print("ℹ️ Install onnxruntime-openvino or change 'ONNXRUNTIME_EXECUTION_PROVIDERS' to one of the available providers")
-            except Exception as e:
-                print(f"⚠️ Could not query onnxruntime providers: {e}")
+                    print("✅ /dev/dri found. OpenVINO should be able to use GPU.")
+            
+            # Add others if provided in env
+            env_providers = os.getenv('ONNXRUNTIME_EXECUTION_PROVIDERS')
+            if env_providers:
+                reqs = [p.strip() for p in env_providers.split(',') if p.strip()]
+                for r in reqs:
+                    if r in available and r not in detected_providers:
+                        detected_providers.append(r)
+        except Exception as e:
+            print(f"⚠️ Could not detect ONNX providers: {e}")
 
         # Determine log level
         log_level_str = os.getenv('AUDIO_SEPARATOR_LOG_LEVEL', 'INFO').upper()
         log_level = getattr(logging, log_level_str, logging.INFO)
         
         # Initialize separator with fixed output dir
-        providers_env = os.getenv('ONNXRUNTIME_EXECUTION_PROVIDERS')
-        if providers_env:
-            print(f"🚀 Environment requests ONNX providers: {providers_env}")
-            
-        # Attempt to pass providers list to Separator, if supported by the library
-        try:
-            # Build kwargs dynamically to avoid static analyzers complaining about 'providers'
-            opts_providers = os.getenv('ONNXRUNTIME_EXECUTION_PROVIDERS')
-            providers_list = [p.strip() for p in opts_providers.split(',') if p.strip()] if opts_providers else None
-            
-            # Use explicit model dir if configured
-            model_dir = os.getenv('AUDIO_SEPARATOR_MODEL_DIR', '/home/user/models')
-            print(f"📂 Checking model directory: {model_dir}")
-            if os.path.exists(model_dir):
-                print(f"📄 Files in model dir: {os.listdir(model_dir)}")
-            else:
-                print(f"⚠️ Model directory does not exist: {model_dir}")
+        model_dir = os.getenv('AUDIO_SEPARATOR_MODEL_DIR', '/home/user/models')
+        print(f"📂 Checking model directory: {model_dir}")
+        if os.path.exists(model_dir):
+            print(f"📄 Files in model dir: {os.listdir(model_dir)}")
+        else:
+            print(f"⚠️ Model directory does not exist: {model_dir}")
 
-            sep_kwargs = {"output_dir": _global_separator_output_dir, "log_level": log_level, "model_file_dir": model_dir}
-            
-            if providers_list:
-                sep_kwargs["providers"] = providers_list
+        sep_kwargs = {"output_dir": _global_separator_output_dir, "log_level": log_level, "model_file_dir": model_dir}
+
+        # Just set the environment variable regardless, as a backup, and log it
+        if detected_providers:
+             print(f"🚀 Configuring ONNX environment with providers: {detected_providers}")
+             os.environ['ONNXRUNTIME_EXECUTION_PROVIDERS'] = ','.join(detected_providers)
+             # Note: audio-separator typically reads os.environ['ONNXRUNTIME_EXECUTION_PROVIDERS'] internally
+
+        try:
             _global_separator = Separator(**sep_kwargs)
         except TypeError:
             # Fallback if the Separator constructor signature doesn't accept our kwargs
@@ -253,32 +255,36 @@ def separate_audio_ai(
                 log_level_str = os.getenv('AUDIO_SEPARATOR_LOG_LEVEL', 'INFO').upper()
                 log_level = getattr(logging, log_level_str, logging.INFO)
                 
-                providers_env = os.getenv('ONNXRUNTIME_EXECUTION_PROVIDERS')
-                if providers_env:
-                    print(f"🚀 Environment requests ONNX providers: {providers_env}")
-
-                # Try to pass providers list to Separator if supported
+                # Auto-detect providers again for per-request instance
+                detected_providers = []
                 try:
-                    providers_list = [p.strip() for p in providers_env.split(',') if p.strip()] if providers_env else None
-                    model_dir = os.getenv('AUDIO_SEPARATOR_MODEL_DIR', '/home/user/models')
+                    import onnxruntime as ort
+                    available = ort.get_available_providers()
+                    if 'OpenVINOExecutionProvider' in available:
+                        detected_providers.append('OpenVINOExecutionProvider')
                     
-                    if output_dir:
-                        os.makedirs(output_dir, exist_ok=True)
-                        sep_kwargs = {"output_dir": output_dir, "log_level": log_level, "model_file_dir": model_dir}
-                    else:
-                        sep_kwargs = {"log_level": log_level, "model_file_dir": model_dir}
+                    env_providers = os.getenv('ONNXRUNTIME_EXECUTION_PROVIDERS')
+                    if env_providers:
+                        for p in env_providers.split(','):
+                             p = p.strip()
+                             if p and p in available and p not in detected_providers:
+                                 detected_providers.append(p)
+                except:
+                    pass
+                
+                if detected_providers:
+                     print(f"🚀 Configuring ONNX environment with providers: {detected_providers}")
+                     os.environ['ONNXRUNTIME_EXECUTION_PROVIDERS'] = ','.join(detected_providers)
 
-                    if providers_list:
-                        sep_kwargs["providers"] = providers_list
+                model_dir = os.getenv('AUDIO_SEPARATOR_MODEL_DIR', '/home/user/models')
+                
+                if output_dir:
+                    os.makedirs(output_dir, exist_ok=True)
+                    sep_kwargs = {"output_dir": output_dir, "log_level": log_level, "model_file_dir": model_dir}
+                else:
+                    sep_kwargs = {"log_level": log_level, "model_file_dir": model_dir}
 
-                    separator = Separator(**sep_kwargs)
-                except TypeError:
-                    # Fallback when Separator doesn't accept 'providers'
-                    if output_dir:
-                        os.makedirs(output_dir, exist_ok=True)
-                        separator = Separator(output_dir=output_dir, log_level=log_level)
-                    else:
-                        separator = Separator(log_level=log_level)
+                separator = Separator(**sep_kwargs)
                 
                 # Load model (heavy op)
                 model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_HQ_3.onnx')
