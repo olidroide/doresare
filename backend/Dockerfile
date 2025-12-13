@@ -123,12 +123,18 @@ RUN useradd -m -u 1000 user && \
 ENV HOME=/home/user \
     PATH=/home/user/.local/bin:$PATH \
     HF_HOME=/home/user/hf_cache \
+    PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONIOENCODING=utf-8 \
     PYTHONFAULTHANDLER=1 \
     ORT_DISABLE_TELEMETRY=1 \
     SKIP_AUDIO_SEPARATION=false \
-    AUDIO_SEPARATION_TIMEOUT=300
+    AUDIO_SEPARATION_TIMEOUT=300 \
+    AUDIO_SEPARATOR_MODEL_DIR=/app/models
+
+# Create model directory and ensure ownership
+RUN mkdir -p $AUDIO_SEPARATOR_MODEL_DIR && \
+    chown -R user:user $AUDIO_SEPARATOR_MODEL_DIR
 # If you use QSV at runtime, set LIBVA_DRIVER_NAME to the appropriate driver (iHD or i965)
 # Example: -e LIBVA_DRIVER_NAME=iHD
 

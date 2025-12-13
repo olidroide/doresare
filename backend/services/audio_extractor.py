@@ -157,7 +157,11 @@ def load_global_model():
             # Build kwargs dynamically to avoid static analyzers complaining about 'providers'
             opts_providers = os.getenv('ONNXRUNTIME_EXECUTION_PROVIDERS')
             providers_list = [p.strip() for p in opts_providers.split(',') if p.strip()] if opts_providers else None
-            sep_kwargs = {"output_dir": _global_separator_output_dir, "log_level": log_level}
+            
+            # Use explicit model dir if configured
+            model_dir = os.getenv('AUDIO_SEPARATOR_MODEL_DIR', '/app/models')
+            sep_kwargs = {"output_dir": _global_separator_output_dir, "log_level": log_level, "model_file_dir": model_dir}
+            
             if providers_list:
                 sep_kwargs["providers"] = providers_list
             _global_separator = Separator(**sep_kwargs)
@@ -235,11 +239,13 @@ def separate_audio_ai(
                 # Try to pass providers list to Separator if supported
                 try:
                     providers_list = [p.strip() for p in providers_env.split(',') if p.strip()] if providers_env else None
+                    model_dir = os.getenv('AUDIO_SEPARATOR_MODEL_DIR', '/app/models')
+                    
                     if output_dir:
                         os.makedirs(output_dir, exist_ok=True)
-                        sep_kwargs = {"output_dir": output_dir, "log_level": log_level}
+                        sep_kwargs = {"output_dir": output_dir, "log_level": log_level, "model_file_dir": model_dir}
                     else:
-                        sep_kwargs = {"log_level": log_level}
+                        sep_kwargs = {"log_level": log_level, "model_file_dir": model_dir}
 
                     if providers_list:
                         sep_kwargs["providers"] = providers_list

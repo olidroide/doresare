@@ -19,8 +19,11 @@ try:
     print("⬇️ Pre-downloading AI models...")
     
     # Initialize separator
-    # This will download the model to the default cache directory
-    separator = Separator(log_level=logging.INFO)
+    # This will download the model to the valid cache directory
+    model_dir = os.getenv('AUDIO_SEPARATOR_MODEL_DIR', '/app/models')
+    os.makedirs(model_dir, exist_ok=True)
+    
+    separator = Separator(log_level=logging.INFO, model_file_dir=model_dir)
     
     # Load the specific model used in the pipeline
     # Using HQ_3 model by default for better performance on low-power CPUs
