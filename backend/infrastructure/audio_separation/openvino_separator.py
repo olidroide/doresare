@@ -35,8 +35,6 @@ class OpenVINOAudioSeparator(AudioSeparator):
         self.precision = precision
 
         config = {
-            "DEVICE_TYPE": device,
-            "PRECISION": precision,
             "NUM_STREAMS": str(num_streams),
         }
 
