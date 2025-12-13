@@ -176,6 +176,7 @@ def load_global_model():
             _global_separator = Separator(output_dir=_global_separator_output_dir, log_level=log_level)
         
         # Validate model file existence and integrity
+        model_path = os.path.join(model_dir, model_name)
         if os.path.exists(model_path):
             file_size = os.path.getsize(model_path)
             print(f"📊 Model file exists. Size: {file_size / 1024 / 1024:.2f} MB")
