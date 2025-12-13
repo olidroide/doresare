@@ -10,6 +10,12 @@ import librosa
 import numpy as np
 
 # --- MONKEY PATCH INIT ---
+# Optimizations for J3455 (Low power CPU)
+os.environ['OMP_NUM_THREADS'] = '2'
+os.environ['OPENVINO_NUM_STREAMS'] = '2'
+# Note: We let OpenVINO decide device, or default to CPU if GPU is not explicitly requested via provider_options,
+# which matches the user's finding that CPU might be stable/better for this specific weak chip.
+
 try:
     import onnxruntime as ort
     _original_inference_session = ort.InferenceSession
@@ -212,8 +218,8 @@ def load_global_model():
             _global_separator = Separator(**sep_kwargs)
         
         # Validate model file existence and integrity
-        # Using UVR-MDX-NET-Inst_Main.onnx (lighter)
-        model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_Main.onnx')
+        # Using Kim_Vocal_2.onnx (lighter)
+        model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'Kim_Vocal_2.onnx')
         model_path = os.path.join(model_dir, model_name)
         if os.path.exists(model_path):
             file_size = os.path.getsize(model_path)

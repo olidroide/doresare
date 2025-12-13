@@ -708,7 +708,22 @@ def render_video_with_overlays(analysis: VideoAnalysis, progress=None, start_pct
             if extra_params:
                 # Use the helper to normalize and merge params safely
                 normalized = _normalize_ffmpeg_params(extra_params, existing_params=ffmpeg_params)
-                ffmpeg_params.extend(normalized)
+                
+                # CRITICAL FIX: Remove '-hwaccel' flags if present.
+                # MoviePy sends RAW frames via pipe. -hwaccel is for DECODING input files.
+                # Using it here causes "Device creation failed" / "Cannot allocate memory" because
+                # FFMPEG tries to init hardware decoding on a raw pipe.
+                for forbidden in ['-hwaccel', '-hwaccel_output_format']:
+                     if forbidden in normalized:
+                         print(f"⚠️ Removing forbidden flag '{forbidden}' for raw frame encoding.")
+                         while forbidden in normalized:
+                             idx = normalized.index(forbidden)
+                             # Remove flag and its value if it has one (qsv usually follows)
+                             if idx + 1 < len(normalized) and normalized[idx+1] == 'qsv':
+                                 del normalized[idx+1]
+                             del normalized[idx]
+
+                ffmpeg_params = normalized
                 
             print(f"🔧 Final ffmpeg_params for {codec}: {ffmpeg_params}")
 
