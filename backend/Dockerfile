@@ -139,7 +139,7 @@ RUN mkdir -p $AUDIO_SEPARATOR_MODEL_DIR && \
 # Example: -e LIBVA_DRIVER_NAME=iHD
 
 # Audio Separation Model Configuration:
-# - Kim_Vocal_2.onnx (default, lightest/fastest, best for J3455/low-end hardware)
+# - UVR-MDX-NET-Inst_Main.onnx (default, lightest/fastest, best for J3455/low-end hardware)
 # - UVR-MDX-NET-Inst_HQ_3.onnx (slower, higher quality)
 # Set SKIP_AUDIO_SEPARATION=true to use original audio (fastest, lower chord accuracy)
 

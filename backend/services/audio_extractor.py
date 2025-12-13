@@ -212,7 +212,8 @@ def load_global_model():
             _global_separator = Separator(**sep_kwargs)
         
         # Validate model file existence and integrity
-        model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'Kim_Vocal_2.onnx')
+        # Using UVR-MDX-NET-Inst_Main.onnx (lighter)
+        model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_Main.onnx')
         model_path = os.path.join(model_dir, model_name)
         if os.path.exists(model_path):
             file_size = os.path.getsize(model_path)

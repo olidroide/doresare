@@ -28,7 +28,7 @@ try:
     # Load the specific model used in the pipeline
     # Using Kim_Vocal_2 model for better performance on low-power CPUs/GPUs
     # Can be overridden with AUDIO_SEPARATOR_MODEL environment variable
-    model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'Kim_Vocal_2.onnx')
+    model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_Main.onnx')
     print(f"⬇️ Downloading model: {model_name}")
     separator.load_model(model_filename=model_name)
     
