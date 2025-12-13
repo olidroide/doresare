@@ -166,29 +166,12 @@ def load_global_model():
             _global_separator = Separator(output_dir=_global_separator_output_dir, log_level=log_level)
         
         # Load the model explicitly (heavy operation - do once)
-        # If USE_OPENVINO is enabled, prefer the compiled OpenVINO IR (.xml)
-        use_openvino = os.getenv('USE_OPENVINO', 'false').lower() == 'true'
-        if use_openvino:
-            # Allow explicit override
-            model_xml = os.getenv('OPENVINO_MODEL_PATH')
-            if not model_xml:
-                # Derive xml name from the configured AUDIO_SEPARATOR_MODEL
-                onnx_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_HQ_3.onnx')
-                base = onnx_name.rsplit('.', 1)[0]
-                model_xml = os.path.join('/app/models_openvino', base + '.xml')
-
-            if model_xml and os.path.exists(model_xml):
-                print(f"🧠 Loading compiled OpenVINO model: {model_xml} (Log Level: {log_level_str})...")
-                _global_separator.load_model(model_filename=model_xml)
-            else:
-                # Fallback to ONNX if compiled IR is not available
-                model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_HQ_3.onnx')
-                print(f"⚠️ OpenVINO mode requested but compiled model not found at {model_xml}. Falling back to ONNX model: {model_name}")
-                _global_separator.load_model(model_filename=model_name)
-        else:
-            model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_HQ_3.onnx')
-            print(f"🧠 Loading global AI model: {model_name} (Log Level: {log_level_str})...")
-            _global_separator.load_model(model_filename=model_name)
+        # Load the model explicitly (heavy operation - do once)
+        # We always load the ONNX model. If OpenVINO is enabled, the ONNXRUNTIME_EXECUTION_PROVIDERS
+        # env var (set above) will tell ONNX Runtime to use the OpenVINO provider.
+        model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_HQ_3.onnx')
+        print(f"🧠 Loading global AI model: {model_name} (Log Level: {log_level_str})...")
+        _global_separator.load_model(model_filename=model_name)
         print("✅ Global AI separation model loaded successfully.")
         
     except Exception as e:
