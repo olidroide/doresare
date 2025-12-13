@@ -56,7 +56,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         echo "⬇️ Pre-downloading models in builder stage..."; \
         /app/.venv/bin/python download_models.py; \
         echo "🚀 Converting ONNX -> OpenVINO IR in builder stage (using pip cache)..."; \
-        /app/.venv/bin/pip install --no-cache-dir openvino openvino-dev onnx; \
+        /bin/uv pip install --python /app/.venv/bin/python openvino openvino-dev onnx; \
         # locate the downloaded ONNX model (search common cache locations), then convert if found \
         MODEL_NAME="UVR-MDX-NET-Inst_HQ_3.onnx"; \
         echo "🔍 Searching for ${MODEL_NAME}..." && \
