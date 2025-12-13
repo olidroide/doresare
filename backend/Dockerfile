@@ -49,6 +49,8 @@ COPY services/font_manager.py services/
 COPY assets assets
 COPY download_models.py .
 
+RUN --mount=type=cache,target=/root/.cache/pip \
+    --mount=type=cache,target=/root/.cache/uv \
     if [ "$USE_OPENVINO" = "true" ]; then \
         set -e; \
         echo "⬇️ Pre-downloading models in builder stage..."; \
