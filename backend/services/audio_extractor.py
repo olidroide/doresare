@@ -275,7 +275,9 @@ def load_global_model():
 
         # FORCE DEBUG LOGGING to find out why it redownloads
         print(f"🧠 Loading global AI model: {model_name} (forcing DEBUG log level)...")
-        _global_separator = Separator(output_dir=_global_separator_output_dir, log_level=logging.DEBUG, model_file_dir=model_dir)
+        # J3455 OPTIMIZATION: Lower overlap = Fewer chunks = Faster processing
+        mdx_params = {"batch_size": 1, "overlap": 0.1}
+        _global_separator = Separator(output_dir=_global_separator_output_dir, log_level=logging.DEBUG, model_file_dir=model_dir, mdx_params=mdx_params)
         # Note: optimizations (segment_size, batch_size) caused crashes on this model. Reverting to defaults.
         _global_separator.load_model(model_filename=model_name)
         print("✅ Global AI separation model loaded successfully.")
@@ -365,8 +367,10 @@ def separate_audio_ai(
                 else:
                     sep_kwargs = {"log_level": log_level, "model_file_dir": model_dir}
 
-                # Note: optimizations removed due to crashes.
-                # sep_kwargs["mdx_params"] = {"batch_size": 1}
+                # J3455 OPTIMIZATION:
+                # Reduce overlap to 0.1 (default 0.25) to reduce total chunks by ~20%.
+                # Batch size 1 is safer for RAM.
+                sep_kwargs["mdx_params"] = {"batch_size": 1, "overlap": 0.1}
 
                 t_init_start = time.time()
                 separator = Separator(**sep_kwargs)
