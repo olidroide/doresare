@@ -1,9 +1,43 @@
-import tempfile
+import logging
 import os
+import tempfile
+import time
+import shutil
+import subprocess
 import numpy as np
 from typing import List, Tuple, Optional
 import pathlib
 import pathlib
+
+# --- FORCE JELLYFIN FFMPEG IF AVAILABLE ---
+# Standard Debian/ImageIO FFmpeg lacks QSV/VAAPI. Jellyfin-FFmpeg has it.
+jellyfin_ffmpeg_path = "/usr/lib/jellyfin-ffmpeg/ffmpeg"
+if os.path.exists(jellyfin_ffmpeg_path):
+    print(f"🔧 Found Jellyfin FFmpeg at {jellyfin_ffmpeg_path}. Forcing usage for HW accel support.")
+    os.environ["FFMPEG_BINARY"] = jellyfin_ffmpeg_path
+else:
+    # Fallback to system ffmpeg or whatever is in path
+    system_ffmpeg = shutil.which("ffmpeg")
+    if system_ffmpeg:
+        print(f"ℹ️ Jellyfin FFmpeg not found. Using system ffmpeg at: {system_ffmpeg}")
+        # explicit set helpful for moviepy
+        os.environ["FFMPEG_BINARY"] = system_ffmpeg
+
+# Verify FFmpeg encoders
+try:
+    ff_bin = os.getenv("FFMPEG_BINARY", "ffmpeg")
+    res = subprocess.run([ff_bin, "-version"], capture_output=True, text=True)
+    print(f"🎞️ FFmpeg Version Info:\n{res.stdout.splitlines()[0]}")
+    
+    # Check encoders
+    res_enc = subprocess.run([ff_bin, "-encoders"], capture_output=True, text=True)
+    if "h264_vaapi" in res_enc.stdout:
+        print("✅ h264_vaapi encoder FOUND.")
+    else:
+        print("❌ h264_vaapi encoder NOT FOUND in this binary.")
+except Exception as e:
+    print(f"⚠️ Could not verify FFmpeg version: {e}")
+# ------------------------------------------
 
 from PIL import Image, ImageDraw, ImageFont
 from moviepy import VideoFileClip, TextClip, CompositeVideoClip, ColorClip, ImageClip, VideoClip
