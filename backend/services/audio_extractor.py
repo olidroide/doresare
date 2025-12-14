@@ -218,15 +218,17 @@ def load_global_model():
             _global_separator = Separator(**sep_kwargs)
         
         # Validate model file existence and integrity
-        # Using Kim_Vocal_2.onnx (lighter)
-        model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'Kim_Vocal_2.onnx')
+        # Validate model file existence and integrity
+        # Using UVR-MDX-NET-Inst_1.onnx (Lightest possible model)
+        model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_1.onnx')
         
         # J3455 SAFETY OVERRIDE:
-        # If user accidentally configured a heavy model, force switch to Kim_Vocal_2
-        if 'HQ_3' in model_name or 'Inst_Main' in model_name:
+        # If user accidentally configured a heavy model (UVR-MDX-NET-Inst_1 is also heavy n_fft=7680), 
+        # force switch to Inst_1 for speed.
+        if 'HQ' in model_name or 'Main' in model_name or 'Kim_Vocal' in model_name:
             print(f"⚠️ DETECTED HEAVY MODEL CONFIGURATION: {model_name}")
-            print("🚀 FORCING 'Kim_Vocal_2.onnx' override for J3455 performance optimization!")
-            model_name = 'Kim_Vocal_2.onnx'
+            print("🚀 FORCING 'UVR-MDX-NET-Inst_1.onnx' override for MAX SPEED!")
+            model_name = 'UVR-MDX-NET-Inst_1.onnx'
             
         if not model_name.endswith('.onnx'):
             model_name += '.onnx'
@@ -343,13 +345,14 @@ def separate_audio_ai(
                 separator = Separator(**sep_kwargs)
                 
                 # Load model (heavy op)
-                model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'Kim_Vocal_2.onnx')
+                # Load model (heavy op)
+                model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_1.onnx')
                 
                 # J3455 SAFETY OVERRIDE (Per-request instance)
-                if 'HQ_3' in model_name or 'Inst_Main' in model_name:
+                if 'HQ' in model_name or 'Main' in model_name or 'Kim_Vocal' in model_name:
                     print(f"⚠️ DETECTED HEAVY MODEL CONFIGURATION (Per-request): {model_name}")
-                    print("🚀 FORCING 'Kim_Vocal_2.onnx' override!")
-                    model_name = 'Kim_Vocal_2.onnx'
+                    print("🚀 FORCING 'UVR-MDX-NET-Inst_1.onnx' override!")
+                    model_name = 'UVR-MDX-NET-Inst_1.onnx'
                     
                 if not model_name.endswith('.onnx'):
                     model_name += '.onnx'
@@ -562,7 +565,7 @@ def separate_with_openvino_wrapper(input_file: str, output_dir: Optional[str] = 
         model = model_path or os.getenv('OPENVINO_MODEL_PATH') or os.getenv('OPENVINO_MODEL', None)
         if not model:
             # Default to converted model location inside image
-            model = os.path.join('/app/models_openvino', os.getenv('AUDIO_SEPARATOR_MODEL', 'Kim_Vocal_2.onnx').rsplit('.', 1)[0] + '.xml')
+            model = os.path.join('/app/models_openvino', os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_1.onnx').rsplit('.', 1)[0] + '.xml')
         device = os.getenv('OPENVINO_DEVICE', 'CPU')
         precision = os.getenv('OPENVINO_PRECISION', 'FP16')
 

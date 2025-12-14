@@ -58,7 +58,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         echo "🚀 Converting ONNX -> OpenVINO IR in builder stage (using pip cache)..."; \
         /bin/uv pip install --python /app/.venv/bin/python openvino openvino-dev onnx; \
         # locate the downloaded ONNX model (search common cache locations), then convert if found \
-        MODEL_NAME="Kim_Vocal_2.onnx"; \
+        MODEL_NAME="UVR-MDX-NET-Inst_1.onnx"; \
         echo "🔍 Searching for ${MODEL_NAME}..." && \
         MODEL_PATH=$(find /root /app -name "${MODEL_NAME}" -type f -print -quit 2>/dev/null); \
         if [ -z "$MODEL_PATH" ]; then \
@@ -149,7 +149,7 @@ RUN mkdir -p $AUDIO_SEPARATOR_MODEL_DIR && \
 # Example: -e LIBVA_DRIVER_NAME=iHD
 
 # Audio Separation Model Configuration:
-# - Kim_Vocal_2.onnx (default, lightest/fastest, best for J3455/low-end hardware)
+# - UVR-MDX-NET-Inst_1.onnx (default, lightest/fastest, best for J3455/low-end hardware)
 # - UVR-MDX-NET-Inst_HQ_3.onnx (slower, higher quality)
 # - UVR-MDX-NET-Inst_Main.onnx (slowest, but high quality)
 
