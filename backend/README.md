@@ -183,3 +183,23 @@ Notes & tips:
 - The Dockerfile converts ONNX -> OpenVINO during the builder stage (faster subsequent builds with pip cache). The final image does not include heavy OpenVINO Python packages unless you explicitly install them at runtime.
 
 If you want, the repository can be updated to set `MOVIEPY_USE_GPU=false` by default (safer) and provide a one-line toggle in `.env.doresare-backend` to enable GPU when the host is validated.
+
+## Low-End Hardware Optimization (Intel J3455/NUC/Atom)
+
+For users running on older Intel hardware (like **Celeron J3455**, Apollo Lake, or Atom CPUs) which **lack AVX instructions**, specific optimizations are applied:
+
+### 1. Audio Loading Lag (Fixed)
+*   **Issue**: `librosa.load` defaults to Resampling (22050Hz), which takes 40s+ on these CPUs.
+*   **Fix**: A Global Monkey Patch in `audio_extractor.py` intercepts these calls and forces `sr=None` (Native Sampling Rate), reducing load time to <1s.
+
+### 2. Audio Separation Speed
+*   **Model**: `UVR_MDXNET_KARA_2.onnx` is the *only* recommended model. It is ~3x faster than heavy models like user defaults.
+*   **OpenVINO GPU**: The backend auto-detects `/dev/dri` and forces `audio-separator` to use OpenVINO on the iGPU (Intel HD 500).
+*   **Constraints**:
+    *   **Do not use `mdx_params`**: On `audio-separator==0.24.4`, passing partial params triggers a crash. Use defaults or post-init attribute injection (handled in code).
+    *   **Batch Size**: Defaults to 1 (Safe). Can be forced to 3 (Fast) via code injection if 4GB RAM is available, but currently disabled for stability.
+
+### 3. Video Rendering (QSV)
+*   **FFmpeg**: Requires `jellyfin-ffmpeg6` (installed in Docker) for vaapi/qsv support.
+*   **Codec**: Uses `h264_qsv` with `extra_hw_frames=64` to prevent buffer starvation errors.
+

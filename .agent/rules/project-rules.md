@@ -55,3 +55,10 @@ This project is a Ukulele Chord Video Generator. It takes a video file as input,
 - `backend/`: Core logic for video processing, chord detection, and API.
 - `frontend/`: User-facing web application.
 - `video_processing/`: Temporary directory for processing artifacts (cleaned up automatically).
+
+## Hardware Constraints (Intel J3455)
+Critically important rules for maintenance on this specific low-end hardware:
+1.  **NO AVX**: The CPU does NOT support AVX instructions. **Do not upgrade** dependencies (especially `onnxruntime` or `audio-separator`) to versions that drop non-AVX support without verifying.
+2.  **Monkey Patching is Required**: `librosa.load` MUST be patched to `sr=None` in `audio_extractor.py`, otherwise audio loading hangs for 40s.
+3.  **Model Constraints**: `UVR_MDXNET_KARA_2.onnx` is the primary model. Heavier models cause timeouts.
+4.  **GPU Acceleration**: OpenVINO is forced via `ONNXRUNTIME_EXECUTION_PROVIDERS`. QSV is used for video via `jellyfin-ffmpeg`. Do not revert to standard `ffmpeg`.
