@@ -8,9 +8,26 @@ from typing import Optional
 
 import librosa
 import numpy as np
+import soundfile as sf  # Explicit import to verify availability
 
 # --- MONKEY PATCH INIT ---
-# Optimizations for J3455 (Low power CPU)
+# 1. OPTIMIZATION: Monkey patch librosa.load to avoid expensive resampling
+# The user correctly identified that librosa.load defaults to sr=22050, causing huge delay.
+# We force sr=None (native) unless explicitly specified.
+_original_librosa_load = librosa.load
+
+def patched_librosa_load(path, sr=22050, mono=True, offset=0.0, duration=None, dtype=np.float32, res_type='kaiser_best'):
+    # If the caller requested default 22050, we override to None (native rate) for speed.
+    # UVR models usually work at 44100, so resampling to 22050 is wasteful anyway.
+    if sr == 22050:
+        print(f"� MonkeyPatch: Intercepted librosa.load! Forcing sr=None (Native) for speed on: {path}")
+        sr = None
+    return _original_librosa_load(path, sr=sr, mono=mono, offset=offset, duration=duration, dtype=dtype, res_type=res_type)
+
+librosa.load = patched_librosa_load
+print("✅ Applied librosa.load optimization patch (sr=None default)")
+
+# 2. OpenVINO Optimizations Monkey Patch
 os.environ['OMP_NUM_THREADS'] = '2'
 os.environ['OPENVINO_NUM_STREAMS'] = '2'
 # Note: We let OpenVINO decide device, or default to CPU if GPU is not explicitly requested via provider_options,
