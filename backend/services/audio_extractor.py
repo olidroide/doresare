@@ -275,8 +275,10 @@ def load_global_model():
 
         # FORCE DEBUG LOGGING to find out why it redownloads
         print(f"🧠 Loading global AI model: {model_name} (forcing DEBUG log level)...")
-        _global_separator = Separator(output_dir=_global_separator_output_dir, log_level=logging.DEBUG, model_file_dir=model_dir)
-        # Note: optimizations (segment_size, batch_size) caused crashes on this model. Reverting to defaults.
+        # J3455 OPTIMIZATION: Increase batch_size to use available RAM/VRAM (Speedup)
+        # 2GB RAM usage observed -> We can afford batch_size=3 (uses more Shared Video Memory)
+        mdx_params = {"batch_size": 3}
+        _global_separator = Separator(output_dir=_global_separator_output_dir, log_level=logging.DEBUG, model_file_dir=model_dir, mdx_params=mdx_params)
         _global_separator.load_model(model_filename=model_name)
         print("✅ Global AI separation model loaded successfully.")
         
@@ -365,8 +367,9 @@ def separate_audio_ai(
                 else:
                     sep_kwargs = {"log_level": log_level, "model_file_dir": model_dir}
 
-                # Note: optimizations removed due to crashes.
-                # sep_kwargs["mdx_params"] = {"batch_size": 1}
+                # J3455 OPTIMIZATION:
+                # Batch size 3 fits in 4GB RAM/VRAM limit and maximizes iGPU parallelism.
+                sep_kwargs["mdx_params"] = {"batch_size": 3}
 
                 t_init_start = time.time()
                 separator = Separator(**sep_kwargs)
