@@ -40,6 +40,19 @@ def get_client():
 async def home(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
+@app.get("/queue-status")
+async def queue_status(request: Request):
+    """Get the current queue status"""
+    active_count = len(jobs)
+    return templates.TemplateResponse(
+        "partials/queue_status.html",
+        {
+            "request": request,
+            "active_jobs": active_count,
+            "status": "busy" if active_count > 0 else "available"
+        }
+    )
+
 @app.get("/process/{job_id}", response_class=HTMLResponse)
 async def view_process(request: Request, job_id: str):
     """
@@ -51,8 +64,12 @@ async def view_process(request: Request, job_id: str):
             "error_message": "Job not found or expired."
         })
     
-    # Return the same partial used for initial queueing, which triggers SSE
-    return templates.TemplateResponse("process.html", {
+    # Check if HTMX request (unlikely for direct GET, but supportive)
+    template_name = "process.html"
+    if request.headers.get("HX-Request"):
+        template_name = "partials/process_content.html"
+
+    return templates.TemplateResponse(template_name, {
         "request": request,
         "job_id": job_id,
         "filename": jobs[job_id]["filename"]
@@ -79,11 +96,6 @@ async def process(request: Request, video_url: str = None, file: UploadFile = Fi
             input_val = handle_file(temp_path)
             print(f"🚀 Saved temp file to {temp_path}")
         elif video_url:
-            # Assuming backend supports URL or we download it. 
-            # Current known backend requires file. 
-            # For now, we only support File upload via UI, but user request had video_url.
-            # We'll assume the intention is File Upload focused for now based on existing code.
-            # If backend supports URL, we'd pass it.
             pass
 
         if not input_val:
@@ -108,7 +120,11 @@ async def process(request: Request, video_url: str = None, file: UploadFile = Fi
         }
         
         # Return HTMX Partial
-        return templates.TemplateResponse("process.html", {
+        template_name = "process.html"
+        if request.headers.get("HX-Request"):
+            template_name = "partials/process_content.html"
+
+        return templates.TemplateResponse(template_name, {
             "request": request,
             "job_id": job_id,
             "filename": filename
