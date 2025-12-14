@@ -275,9 +275,33 @@ def load_global_model():
 
         # FORCE DEBUG LOGGING to find out why it redownloads
         print(f"🧠 Loading global AI model: {model_name} (forcing DEBUG log level)...")
-        # Note: optimizations (batch_size) caused crashes. Reverting to defaults (batch_size=1).
-        _global_separator = Separator(output_dir=_global_separator_output_dir, log_level=logging.DEBUG, model_file_dir=model_dir)
         _global_separator.load_model(model_filename=model_name)
+        
+        # J3455 OPTIMIZATION: Post-init Batch Size Injection
+        # We couldn't pass it in init() due to crashes, so we inject it now.
+        try:
+            target_batch_size = 3
+            print(f"🔧 Attempting to inject batch_size={target_batch_size}...")
+            
+            # 1. Try setting on the wrapper itself (shim)
+            if hasattr(_global_separator, 'batch_size'):
+                _global_separator.batch_size = target_batch_size
+                print(f"✅ Set _global_separator.batch_size = {target_batch_size}")
+                
+            # 2. Try setting on the underlying model instance (Real handler)
+            if hasattr(_global_separator, 'model_instance'):
+                 if hasattr(_global_separator.model_instance, 'batch_size'):
+                    _global_separator.model_instance.batch_size = target_batch_size
+                    print(f"✅ Set _global_separator.model_instance.batch_size = {target_batch_size}")
+                 
+                 # Also check for 'mdx_batch_size' specific param
+                 if hasattr(_global_separator.model_instance, 'mdx_batch_size'):
+                    _global_separator.model_instance.mdx_batch_size = target_batch_size
+                    print(f"✅ Set _global_separator.model_instance.mdx_batch_size = {target_batch_size}")
+                    
+        except Exception as e:
+            print(f"⚠️ Failed to inject batch_size optimization: {e}")
+            
         print("✅ Global AI separation model loaded successfully.")
         
     except Exception as e:
@@ -389,6 +413,16 @@ def separate_audio_ai(
                 t_load_start = time.time()
                 separator.load_model(model_filename=model_name)
                 print(f"⏱️ Model load took {time.time() - t_load_start:.2f}s")
+                
+                # J3455 OPTIMIZATION: Post-init Injection
+                try:
+                    target_batch_size = 3
+                    if hasattr(separator, 'model_instance') and hasattr(separator.model_instance, 'batch_size'):
+                        separator.model_instance.batch_size = target_batch_size
+                        print(f"✅ Injected batch_size={target_batch_size} into local separator instance.")
+                except:
+                    pass
+                    
                 using_global = False
             
             # Wrapper to update shared progress state with logging
