@@ -68,3 +68,18 @@
         transform: translateX(100%);
     }
 }
+
+/* Spectacular Progress Animations */
+@keyframes shimmer-fast {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+@keyframes glow-pulse {
+    0%, 100% { opacity: 0.6; box-shadow: 0 0 15px rgba(99, 102, 241, 0.5); }
+    50% { opacity: 1; box-shadow: 0 0 25px rgba(168, 85, 247, 0.8); }
+}
+
+.progress-glow {
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.5);
+}

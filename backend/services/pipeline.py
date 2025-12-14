@@ -83,7 +83,12 @@ def generate_video(input_file: str, file_manager: FileManager, progress=None, cl
             # Start separation in background with a shared state
             import threading
             separation_result = {'stem_file': None, 'done': False}
-            
+            shared_progress = [0.0]  # Thread-safe container for progress
+
+            def sep_progress_callback(pct):
+                """Updates the shared progress state (0.0 to 1.0)"""
+                shared_progress[0] = pct
+
             def run_separation():
                 try:
                     # Unified path: separate_audio_ai handles usage of global model,
@@ -91,7 +96,7 @@ def generate_video(input_file: str, file_manager: FileManager, progress=None, cl
                     stem_file = audio_extractor.separate_audio_ai(
                         audio_file,
                         output_dir=work_dir,
-                        progress_callback=None,  # We'll handle progress in main thread
+                        progress_callback=sep_progress_callback,  # Pass the real callback
                         timeout_seconds=separation_timeout
                     )
                     separation_result['stem_file'] = stem_file
@@ -105,13 +110,12 @@ def generate_video(input_file: str, file_manager: FileManager, progress=None, cl
             sep_thread = threading.Thread(target=run_separation, daemon=True)
             sep_thread.start()
             
-            # Poll for completion and report incremental progress
+            # Poll for completion and report real progress
             elapsed = 0
-            poll_interval = 2  # seconds
+            poll_interval = 0.5  # Poil faster for smoother UI updates
             max_wait = separation_timeout
-            simulated_progress = 0.2  # Start at 20%
-            last_log_time = 0  # Track when we last logged
-            
+            last_log_time = 0
+
             while not separation_result['done'] and elapsed < max_wait:
                 import time
                 time.sleep(poll_interval)
@@ -119,19 +123,23 @@ def generate_video(input_file: str, file_manager: FileManager, progress=None, cl
                 
                 # Log heartbeat every 10 seconds for Docker visibility
                 if elapsed - last_log_time >= 10:
-                    print(f"⏳ Audio separation in progress... {elapsed}s elapsed", flush=True)
+                    print(f"⏳ Audio separation in progress... {elapsed:.1f}s elapsed", flush=True)
                     last_log_time = elapsed
                 
-                # Simulate gradual progress: 0.2 -> 0.38 over 30 seconds (typical separation time)
-                # Increment by 0.006 per 2 seconds (0.003 per second)
-                # This gives us 30 * 0.003 = 0.09, so 0.2 + 0.09 = 0.29
-                # Let's be more aggressive: 0.2 -> 0.35 over expected 25 seconds
-                increment = 0.15 / 25 * poll_interval  # 0.15 range over 25 seconds
-                simulated_progress = min(0.35, simulated_progress + increment)
+                # Get real progress from the shared state
+                current_sep_progress = shared_progress[0]  # 0.0 to 1.0
                 
                 if progress:
-                    pct = int((simulated_progress - 0.2) / 0.2 * 100)  # 0-100 for the 0.2-0.4 range
-                    progress(simulated_progress, desc=f"Separating audio with AI ({pct}%)...")
+                    # Map [0.0, 1.0] to pipeline range [0.2, 0.4]
+                    # pipeline_progress = 0.2 + (current_sep_progress * 0.2)
+                    pipeline_progress = 0.2 + (current_sep_progress * 0.2)
+                    
+                    # Prevent going backwards if we switch models or something (unlikely but safe)
+                    # And don't exceed 0.39 (leave room for chord detection start at 0.4)
+                    pipeline_progress = min(0.39, pipeline_progress)
+                    
+                    pct_display = int(current_sep_progress * 100)
+                    progress(pipeline_progress, desc=f"Separating audio with AI ({pct_display}%)...")
             
             # Wait for thread to complete (if it hasn't already)
             sep_thread.join(timeout=1)

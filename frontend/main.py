@@ -265,13 +265,24 @@ async def events(request: Request):
                         # Extract info
                         progress = 0
                         desc = "Processing..."
+                        detail = ""
+                        
                         if status.progress_data:
                             latest = status.progress_data[-1]
-                            if latest and latest.progress is not None:
+                            if latest.progress is not None:
                                 progress = int(latest.progress * 100)
-                            if latest and latest.desc:
+                            if latest.desc:
                                 desc = latest.desc
-                        
+                            
+                            # Attempt to extract granular details if available
+                            # Gradio Client ProgressUnit has: index, length, unit, desc, progress
+                            idx = getattr(latest, "index", None)
+                            length = getattr(latest, "length", None)
+                            unit = getattr(latest, "unit", "steps")
+                            
+                            if idx is not None and length is not None:
+                                detail = f"{idx} / {length} {unit}"
+
                         # Calculate queue pos
                         status_code_str = str(status.code)
                         # ... (Queue logic simplified for brevity, same as before)
@@ -283,6 +294,7 @@ async def events(request: Request):
                             "type": "progress",
                             "progress": progress,
                             "status": desc,
+                            "detail": detail,
                             "position": queue_pos,
                             "queue_size": str(len(jobs))
                         }

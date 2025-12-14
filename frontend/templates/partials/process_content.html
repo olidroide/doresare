@@ -1,69 +1,122 @@
 <!-- partials/process_content.html -->
 <div id="process-container" class="w-full max-w-lg mx-auto space-y-8" data-job-id="{{ job_id }}">
 
+    <!-- Custom Styles moved to static/custom.css -->
+
+
     <header class="text-center space-y-2">
         <div
             class="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/30 mb-2">
             <span class="text-2xl">🎸</span>
         </div>
         <h2 class="text-2xl font-bold text-white">Processing Video</h2>
-        <p class="text-slate-400 text-sm">Job ID: <span class="font-mono text-indigo-400">{{ job_id }}</span></p>
     </header>
 
-    <div class="glass-panel rounded-3xl p-6 sm:p-8 shadow-2xl shadow-black/50">
+    <div
+        class="glass-panel rounded-3xl p-6 sm:p-8 shadow-2xl shadow-black/50 relative overflow-hidden bg-slate-900/40 backdrop-blur-xl border border-white/10">
+
+        <!-- Background Ambient Glow -->
+        <div
+            class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-indigo-500/50 to-transparent">
+        </div>
+
         <!-- Progress UI -->
-        <div id="sse-container" class="flex flex-col gap-6">
+        <div id="sse-container" class="flex flex-col gap-8 relative z-10">
             <!-- Status Steps -->
-            <div
-                class="flex items-center justify-between text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                <span class="text-indigo-400">Uploaded</span>
-                <span id="step-processing" class="animate-pulse text-indigo-400">Processing</span>
+            <div class="flex items-center justify-between text-xs font-bold text-slate-500 uppercase tracking-widest">
+                <span class="text-indigo-400 drop-shadow-md">Uploaded</span>
+                <span id="step-processing"
+                    class="animate-pulse text-indigo-300 drop-shadow-[0_0_8px_rgba(99,102,241,0.6)]">Processing</span>
                 <span id="step-complete">Complete</span>
             </div>
 
-            <!-- Progress Bar -->
-            <div class="relative h-4 bg-gray-800 rounded-full overflow-hidden shadow-inner border border-white/5">
-                <div id="progress-fill" style="width: 0%"
-                    class="absolute top-0 left-0 h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 transition-all duration-300 ease-out">
-                    <div class="absolute inset-0 bg-white/20 animate-[shimmer_2s_infinite]"></div>
+            <!-- Spectacular Progress Bar -->
+            <div class="space-y-2">
+                <div
+                    class="relative h-6 bg-slate-800/80 rounded-full overflow-hidden shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)] border border-white/5 ring-1 ring-white/10">
+
+                    <!-- The Fill -->
+                    <div id="progress-fill" style="width: 0%"
+                        class="absolute top-0 left-0 h-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 transition-all duration-500 ease-out progress-glow">
+
+                        <!-- Inner Shimmer/Shine -->
+                        <div
+                            class="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-full animate-[shimmer-fast_2s_infinite_linear]">
+                        </div>
+
+                        <!-- End Cap Glow -->
+                        <div class="absolute right-0 top-0 h-full w-2 bg-white/50 blur-[2px]"></div>
+                    </div>
+                </div>
+                <!-- Percentage Check -->
+                <div class="flex justify-end">
+                    <span id="progress-percent" class="text-xs font-mono text-indigo-300">0%</span>
                 </div>
             </div>
 
-            <!-- Stats -->
-            <div class="grid grid-cols-2 gap-3 text-center">
-                <div class="bg-gray-800/50 rounded-lg p-3 border border-white/5">
-                    <div class="text-xs text-slate-400 mb-1">Queue Position</div>
-                    <div class="font-mono text-xl font-bold text-white leading-none">
-                        <span id="queue-pos">-</span>/<span id="queue-size">-</span>
-                    </div>
+            <!-- Status Text Area -->
+            <div class="text-center space-y-1">
+                <div id="status-text"
+                    class="text-xl sm:text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-200 via-white to-purple-200 animate-pulse drop-shadow-sm">
+                    Connecting...
                 </div>
-                <div class="bg-gray-800/50 rounded-lg p-3 border border-white/5">
-                    <div class="text-xs text-slate-400 mb-1">Status</div>
-                    <div id="status-text" class="font-md text-white leading-none truncate px-1">Connecting...</div>
+                <!-- Granular Detail (Chunks etc) -->
+                <div id="status-detail" class="text-sm font-medium text-slate-400 h-5">
+                    <!-- Detail populated by JS -->
+                </div>
+            </div>
+
+            <!-- Queue Info (Hidden by default) -->
+            <div id="queue-container" class="hidden text-center transform transition-all">
+                <div
+                    class="inline-block bg-slate-800/80 rounded-lg px-6 py-3 border border-indigo-500/30 shadow-[0_0_15px_rgba(99,102,241,0.15)]">
+                    <div class="text-[10px] text-indigo-300 uppercase tracking-widest mb-1">Queue Position</div>
+                    <div class="font-mono text-2xl font-bold text-white leading-none flex items-center gap-2">
+                        <span class="relative flex h-3 w-3">
+                            <span
+                                class="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-3 w-3 bg-indigo-500"></span>
+                        </span>
+                        <span><span id="queue-pos">-</span> / <span id="queue-size">-</span></span>
+                    </div>
                 </div>
             </div>
 
             <!-- Actions -->
             <div id="actions" class="hidden text-center mt-4">
                 <a id="download-btn" href="#"
-                    class="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 md:py-4 md:text-lg md:px-10 transition-all shadow-lg shadow-indigo-500/30">
-                    Download Video 🎥
+                    class="inline-flex items-center justify-center px-8 py-4 border border-indigo-500/50 text-lg font-bold rounded-xl text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 shadow-[0_0_20px_rgba(79,70,229,0.4)] hover:shadow-[0_0_30px_rgba(168,85,247,0.6)] transition-all transform hover:-translate-y-1 group">
+                    <span>Download Video</span>
+                    <span class="ml-2 group-hover:rotate-12 transition-transform">🚀</span>
                 </a>
-                <a href="/" class="block mt-4 text-sm text-slate-400 hover:text-white transition-colors">Process
-                    Another</a>
+                <a href="/"
+                    class="block mt-6 text-sm text-slate-400 hover:text-white transition-colors border-b border-transparent hover:border-slate-400 inline-block pb-0.5">Process
+                    Another Video</a>
             </div>
         </div>
 
         <!-- Error Container -->
-        <div id="error-container" class="hidden text-center space-y-4">
-            <div class="text-red-500 text-5xl">⚠️</div>
-            <h3 class="text-xl font-bold text-white">Something went wrong</h3>
-            <p id="error-msg" class="text-slate-400 text-sm">Unknown error occurred.</p>
+        <div id="error-container" class="hidden text-center space-y-6 py-4">
+            <div class="relative w-20 h-20 mx-auto">
+                <div class="absolute inset-0 bg-red-500/20 rounded-full animate-ping"></div>
+                <div
+                    class="relative flex items-center justify-center w-full h-full bg-red-500/10 rounded-full border border-red-500/50 text-4xl">
+                    ⚠️</div>
+            </div>
+
+            <div class="space-y-2">
+                <h3 class="text-xl font-bold text-white">Processing Failed</h3>
+                <p id="error-msg"
+                    class="text-red-300 text-sm bg-red-950/30 p-3 rounded-lg border border-red-500/20 mx-auto max-w-xs break-words">
+                    Unknown error.</p>
+            </div>
+
             <button onclick="window.location.reload()"
-                class="px-4 py-2 bg-slate-700 text-white rounded hover:bg-slate-600 transition-colors">
+                class="px-6 py-2 bg-slate-700 text-white font-medium rounded-lg hover:bg-slate-600 transition-colors border border-white/5">
                 Retry Connection
             </button>
-            <a href="/" class="block mt-4 text-sm text-slate-400 hover:text-white">Go Home</a>
+            <a href="/" class="block mt-4 text-xs text-slate-500 hover:text-white uppercase tracking-wider">Return
+                Home</a>
         </div>
     </div>
 
@@ -74,7 +127,7 @@
 
             console.log(`🔌 INIT Process View for Job: ${jobId}`);
 
-            // Update URL only if not already match
+            // Update URL if needed
             if (!window.location.pathname.includes(jobId) && !window.location.pathname.includes("process")) {
                 try {
                     window.history.pushState({}, '', `/process/${jobId}`);
@@ -83,40 +136,73 @@
 
             // UI Elements
             const progressFill = container.querySelector('#progress-fill');
+            const progressPercent = container.querySelector('#progress-percent');
+            const statusText = container.querySelector('#status-text');
+            const statusDetail = container.querySelector('#status-detail');
+
+            const queueContainer = container.querySelector('#queue-container');
             const queuePos = container.querySelector('#queue-pos');
             const queueSize = container.querySelector('#queue-size');
-            const statusText = container.querySelector('#status-text');
+
             const actions = container.querySelector('#actions');
             const downloadBtn = container.querySelector('#download-btn');
+
             const stepProcessing = container.querySelector('#step-processing');
             const stepComplete = container.querySelector('#step-complete');
+
             const errorContainer = container.querySelector('#error-container');
             const sseUiContainer = container.querySelector('#sse-container');
             const errorMsg = container.querySelector('#error-msg');
 
             function handleProgress(e) {
                 const data = e.detail;
-                // console.log('Job Data:', data); 
 
                 if (data.type === 'progress') {
+                    // Update main bar
                     progressFill.style.width = `${data.progress}%`;
+                    progressPercent.textContent = `${data.progress}%`;
+
+                    // Update text
                     statusText.textContent = data.status || 'Processing...';
 
-                    if (data.position && data.position !== 'Processing') {
+                    // Update Detail (New!)
+                    if (data.detail) {
+                        statusDetail.textContent = data.detail;
+                        statusDetail.classList.remove('opacity-0');
+                    } else {
+                        statusDetail.textContent = '';
+                    }
+
+                    // Queue Logic
+                    if (data.position && data.position !== 'Processing' && data.position !== '-') {
+                        queueContainer.classList.remove('hidden');
                         queuePos.textContent = data.position;
                         queueSize.textContent = data.queue_size;
+                        // While in queue, status might be generic, detail might be empty
+                    } else {
+                        queueContainer.classList.add('hidden');
                     }
+
                 } else if (data.type === 'complete') {
                     progressFill.style.width = '100%';
-                    statusText.textContent = 'Done!';
-                    stepProcessing.classList.remove('animate-pulse');
-                    stepComplete.classList.add('text-green-400', 'font-bold');
+                    progressPercent.textContent = '100%';
+
+                    statusText.textContent = 'Done! 🎉';
+                    statusText.classList.remove('animate-pulse', 'bg-clip-text', 'text-transparent');
+                    statusText.classList.add('text-green-400');
+                    statusDetail.textContent = 'Your video is ready.';
+
+                    stepProcessing.classList.remove('animate-pulse', 'text-indigo-300');
+                    stepProcessing.classList.add('text-slate-500');
+
+                    stepComplete.classList.add('text-green-400', 'font-bold', 'drop-shadow-[0_0_10px_rgba(74,222,128,0.5)]');
+                    queueContainer.classList.add('hidden');
 
                     if (data.video_url) {
                         downloadBtn.href = data.video_url;
                         actions.classList.remove('hidden');
+                        actions.classList.add('animate-[fadeIn_1s_ease-out]');
                     }
-                    // We don't close the source because it's global
                 } else if (data.type === 'error') {
                     showError(data.error_message);
                 }
@@ -131,14 +217,7 @@
             // Listen for global events dispatched by index.html
             document.addEventListener('job-progress', handleProgress);
 
-            // Cleanup listener if this element is removed (MutationObserver or similar needed for true exact cleanup, 
-            // but for this app replacing the innerHTML is the main way it changes)
-            // For now, simpler: we check if container exists in the handler? 
-            // Better: Since the page reload clears everything, and HTMX swap replaces it...
-            // JS closures might persist attached to document. 
-            // Let's implement a self-check.
-
-            // Overwriting the handler to perform a check
+            // Cleanup listener check
             const originalHandle = handleProgress;
             const safeHandle = (e) => {
                 if (!document.body.contains(container)) {
@@ -147,8 +226,7 @@
                 }
                 originalHandle(e);
             }
-            // Remove previous if any (hard to do with anonymous, so we rely on the check)
-            document.removeEventListener('job-progress', handleProgress); // Won't work for prev instances
+            document.removeEventListener('job-progress', handleProgress);
             document.addEventListener('job-progress', safeHandle);
 
         })();
