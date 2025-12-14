@@ -293,8 +293,11 @@ def separate_audio_ai(
         try:
             print(f"🧠 Starting AI separation (2 stems: vocals/instrumental)...")
             print(f"⏱️  Timeout set to {timeout_seconds} seconds")
+            t_start = time.time()
             
             from audio_separator.separator import Separator
+            t_imports = time.time()
+            print(f"⏱️ Imports took {t_imports - t_start:.2f}s")
             
             # Use global separator if available
             global _global_separator, _global_separator_output_dir
@@ -305,8 +308,7 @@ def separate_audio_ai(
                 using_global = True
             else:
                 print("⚠️ Global model not loaded, creating new instance (slower)")
-                # Configure output dir
-                # Configure output dir
+                # ... [Code omitted for brevity: providers setup] ...
                 log_level_str = os.getenv('AUDIO_SEPARATOR_LOG_LEVEL', 'INFO').upper()
                 log_level = getattr(logging, log_level_str, logging.INFO)
                 
@@ -342,7 +344,9 @@ def separate_audio_ai(
                 # Note: optimizations removed due to crashes.
                 # sep_kwargs["mdx_params"] = {"batch_size": 1}
 
+                t_init_start = time.time()
                 separator = Separator(**sep_kwargs)
+                print(f"⏱️ Separator init took {time.time() - t_init_start:.2f}s")
                 
                 # Load model (heavy op)
                 # Load model (heavy op)
@@ -358,7 +362,9 @@ def separate_audio_ai(
                     model_name += '.onnx'
 
                 print(f"🧠 Loading specific model: {model_name}")
+                t_load_start = time.time()
                 separator.load_model(model_filename=model_name)
+                print(f"⏱️ Model load took {time.time() - t_load_start:.2f}s")
                 using_global = False
             
             # Wrapper to update shared progress state with logging
@@ -378,12 +384,14 @@ def separate_audio_ai(
             
             # Separate capturing stderr for progress
             print(f"⤵️ Calling separator.separate({input_file})...", flush=True)
+            t_sep_start = time.time()
             if progress_callback:
                 with TqdmProgressCapturer(internal_progress_callback):
                     output_files = separator.separate(input_file)
             else:
                 output_files = separator.separate(input_file)
             print(f"✅ separator.separate() returned: {output_files}", flush=True)
+            print(f"⏱️ Separation (inference) took {time.time() - t_sep_start:.2f}s")
             
             # If using global separator, we need to move files to the requested output_dir
             if using_global and output_dir and output_files:
