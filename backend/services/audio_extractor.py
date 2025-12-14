@@ -138,7 +138,7 @@ def extract_audio_from_video(video_file: str, output_dir: Optional[str] = None, 
             
         print(f"🎵 Writing audio to (PCM 16-bit, 44.1kHz): {path}")
         # Optimize for speed: 16-bit writes faster than float, 44100 is standard
-        video.audio.write_audiofile(path, codec='pcm_s16le', fps=44100, logger=None, verbose=False)
+        video.audio.write_audiofile(path, codec='pcm_s16le', fps=44100, logger=None)
         video.close()
         return path
     except Exception as e:
