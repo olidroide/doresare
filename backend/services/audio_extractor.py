@@ -103,27 +103,49 @@ class TqdmProgressCapturer:
         # Try to find progress percentage
         # tqdm usually writes lines like: " 50%|██████████████              | 1/2 [00:01<00:01,  1.63s/it]"
         # We look for the last occurrence of "N%"
-        matches = self._pattern.findall(self.buffer)
-        if matches:
+        # Try to find progress percentage and detail
+        # tqdm lines vary:
+        # "100%|██████████| 24/24 [06:06<00:00, 15.29s/it]"
+        # " 50% 10/20 [00:01<00:01]"
+        
+        # We look for the percentage pattern
+        pct_matches = self._pattern.findall(self.buffer)
+        
+        # We also look for "N/M" pattern for chunks/steps
+        # This regex looks for: Digits, slash, Digits.
+        detail_match = re.search(r'(\d+)/(\d+)', self.buffer)
+        detail_str = ""
+        if detail_match:
+             current, total = detail_match.groups()
+             # Validate they are vaguely reasonable to avoid capturing dates or other noise
+             # But audio chunks usually small int. 
+             detail_str = f"{current}/{total} chunks"
+
+        if pct_matches:
             try:
                 # Take the last match as current progress
-                pct = int(matches[-1])
+                pct = int(pct_matches[-1])
                 normalized_pct = pct / 100.0
                 
-                # IMPORTANT: Only report if progress increased
-                # This prevents jumps when audio-separator processes multiple stems
-                # (vocals at 96%, then instrumental starting at 0%)
-                if normalized_pct > self.last_progress:
+                # IMPORTANT: Only report if progress increased OR if it's the same but we have detail now
+                if normalized_pct >= self.last_progress:
                     self.last_progress = normalized_pct
                     
                     # Print to stdout for Docker logs visibility (every 10%)
                     if pct >= self.last_logged_pct + 10:
-                        print(f"🎵 Audio separation progress: {pct}%", flush=True)
+                        print(f"🎵 Audio separation progress: {pct}% {detail_str}", flush=True)
                         self.last_logged_pct = pct
                     
                     # Call the callback
                     if self.callback:
-                        self.callback(normalized_pct)
+                        # Improved: Check argument count or pass as kwarg if possible, 
+                        # but we control the callback in pipeline.py so we know it accepts detail.
+                        try:
+                             self.callback(normalized_pct, detail=detail_str)
+                        except TypeError:
+                             # Fallback for old callbacks that only accept one arg
+                             self.callback(normalized_pct)
+
             except ValueError:
                 pass
         

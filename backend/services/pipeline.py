@@ -83,11 +83,16 @@ def generate_video(input_file: str, file_manager: FileManager, progress=None, cl
             # Start separation in background with a shared state
             import threading
             separation_result = {'stem_file': None, 'done': False}
-            shared_progress = [0.0]  # Thread-safe container for progress
+            # Start separation in background with a shared state
+            import threading
+            separation_result = {'stem_file': None, 'done': False}
+            shared_progress = {'pct': 0.0, 'detail': ''}  # Dict for progress and detail
 
-            def sep_progress_callback(pct):
-                """Updates the shared progress state (0.0 to 1.0)"""
-                shared_progress[0] = pct
+            def sep_progress_callback(pct, detail=""):
+                """Updates the shared progress state"""
+                shared_progress['pct'] = pct
+                if detail:
+                    shared_progress['detail'] = detail
 
             def run_separation():
                 try:
@@ -127,11 +132,11 @@ def generate_video(input_file: str, file_manager: FileManager, progress=None, cl
                     last_log_time = elapsed
                 
                 # Get real progress from the shared state
-                current_sep_progress = shared_progress[0]  # 0.0 to 1.0
+                current_sep_progress = shared_progress['pct']  # 0.0 to 1.0
+                detail_str = shared_progress['detail']
                 
                 if progress:
                     # Map [0.0, 1.0] to pipeline range [0.2, 0.4]
-                    # pipeline_progress = 0.2 + (current_sep_progress * 0.2)
                     pipeline_progress = 0.2 + (current_sep_progress * 0.2)
                     
                     # Prevent going backwards if we switch models or something (unlikely but safe)
@@ -139,7 +144,13 @@ def generate_video(input_file: str, file_manager: FileManager, progress=None, cl
                     pipeline_progress = min(0.39, pipeline_progress)
                     
                     pct_display = int(current_sep_progress * 100)
-                    progress(pipeline_progress, desc=f"Separating audio with AI ({pct_display}%)...")
+                    
+                    # Format description with detail if available
+                    desc_str = f"Separating audio with AI ({pct_display}%)..."
+                    if detail_str:
+                         desc_str = f"Separating audio with AI ({pct_display}%) - {detail_str}"
+                         
+                    progress(pipeline_progress, desc=desc_str)
             
             # Wait for thread to complete (if it hasn't already)
             sep_thread.join(timeout=1)
