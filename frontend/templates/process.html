@@ -19,6 +19,29 @@
         <!-- Include the shared content partial -->
         {% include 'partials/process_content.html' %}
     </main>
+
+    <!-- Global SSE Handler for persistent view -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log("🔌 Connecting to Unified SSE Stream (Process View)...");
+            const evtSource = new EventSource("/events");
+
+            evtSource.addEventListener("queue_status", (e) => {
+                // process view might not have global stats footer, but we listen anyway
+                // or we could add the footer to process.html
+            });
+
+            evtSource.addEventListener("job_progress", (e) => {
+                const data = JSON.parse(e.data);
+                const event = new CustomEvent('job-progress', { detail: data });
+                document.dispatchEvent(event);
+            });
+
+            evtSource.onerror = (e) => {
+                // console.log("SSE Reconnecting...");
+            };
+        });
+    </script>
 </body>
 
 </html>

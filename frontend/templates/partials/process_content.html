@@ -70,24 +70,18 @@
     <script>
         (function () {
             const container = document.getElementById('process-container');
-            // If we are replacing existing content, ensure we don't double-bind if script re-runs.
-            // But this is a scoped closure, so variables are local.
-
             const jobId = "{{ job_id }}";
-            const sseUrl = `/sse/${jobId}`;
 
-            console.log(`🔌 INIT SSE: ${sseUrl}`);
+            console.log(`🔌 INIT Process View for Job: ${jobId}`);
 
             // Update URL only if not already match
-            if (!window.location.pathname.includes(jobId)) {
+            if (!window.location.pathname.includes(jobId) && !window.location.pathname.includes("process")) {
                 try {
                     window.history.pushState({}, '', `/process/${jobId}`);
                 } catch (e) { console.warn("History push failed", e); }
             }
 
-            const evtSource = new EventSource(sseUrl);
-
-            // Scoped lookups
+            // UI Elements
             const progressFill = container.querySelector('#progress-fill');
             const queuePos = container.querySelector('#queue-pos');
             const queueSize = container.querySelector('#queue-size');
@@ -100,9 +94,9 @@
             const sseUiContainer = container.querySelector('#sse-container');
             const errorMsg = container.querySelector('#error-msg');
 
-            evtSource.onmessage = function (e) {
-                const data = JSON.parse(e.data);
-                // console.log('SSE Data:', data); // Verbose
+            function handleProgress(e) {
+                const data = e.detail;
+                // console.log('Job Data:', data); 
 
                 if (data.type === 'progress') {
                     progressFill.style.width = `${data.progress}%`;
@@ -122,22 +116,41 @@
                         downloadBtn.href = data.video_url;
                         actions.classList.remove('hidden');
                     }
-                    evtSource.close();
+                    // We don't close the source because it's global
                 } else if (data.type === 'error') {
                     showError(data.error_message);
-                    evtSource.close();
                 }
-            };
-
-            evtSource.onerror = function (e) {
-                // console.log("SSE Retry..."); 
-            };
+            }
 
             function showError(msg) {
                 sseUiContainer.classList.add('hidden');
                 errorContainer.classList.remove('hidden');
                 errorMsg.textContent = msg;
             }
+
+            // Listen for global events dispatched by index.html
+            document.addEventListener('job-progress', handleProgress);
+
+            // Cleanup listener if this element is removed (MutationObserver or similar needed for true exact cleanup, 
+            // but for this app replacing the innerHTML is the main way it changes)
+            // For now, simpler: we check if container exists in the handler? 
+            // Better: Since the page reload clears everything, and HTMX swap replaces it...
+            // JS closures might persist attached to document. 
+            // Let's implement a self-check.
+
+            // Overwriting the handler to perform a check
+            const originalHandle = handleProgress;
+            const safeHandle = (e) => {
+                if (!document.body.contains(container)) {
+                    document.removeEventListener('job-progress', safeHandle);
+                    return;
+                }
+                originalHandle(e);
+            }
+            // Remove previous if any (hard to do with anonymous, so we rely on the check)
+            document.removeEventListener('job-progress', handleProgress); // Won't work for prev instances
+            document.addEventListener('job-progress', safeHandle);
+
         })();
     </script>
 </div>

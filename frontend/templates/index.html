@@ -38,79 +38,75 @@
             </header>
 
             <!-- Main Card -->
-            <div class="glass-panel rounded-3xl p-6 sm:p-8 shadow-2xl shadow-black/50">
-                <!-- Upload Form (will be hidden during processing) -->
-                <div id="upload-form-container">
-                    <form hx-post="/process" hx-encoding="multipart/form-data" hx-target="#resultado"
-                        hx-indicator="#loading" class="space-y-6">
+            <div id="main-container">
+                {% if active_job_id %}
+                <!-- User has active job: Show Process View directly -->
+                {% include 'partials/process_content.html' %}
+                {% else %}
+                <!-- No active job: Show Upload Form -->
+                <div class="glass-panel rounded-3xl p-6 sm:p-8 shadow-2xl shadow-black/50">
+                    <div id="upload-form-container">
+                        <form hx-post="/process" hx-encoding="multipart/form-data" hx-target="#main-container"
+                            hx-swap="innerHTML" hx-indicator="#loading" class="space-y-6">
 
-                        <!-- File Upload Drop Zone -->
-                        <div class="group relative">
-                            <input type="file" name="file" accept=".mp4,.mov,.avi" required
-                                class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20">
+                            <!-- File Upload Drop Zone -->
+                            <div class="group relative">
+                                <input type="file" name="file" accept=".mp4,.mov,.avi" required
+                                    class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20">
 
-                            <div id="drop-zone"
-                                class="border-2 border-dashed border-gray-700 rounded-2xl p-8 text-center transition-all group-hover:border-indigo-500 group-hover:bg-slate-800/50 bg-slate-900/30 h-48 flex flex-col items-center justify-center gap-3">
-                                <div
-                                    class="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg">
+                                <div id="drop-zone"
+                                    class="border-2 border-dashed border-gray-700 rounded-2xl p-8 text-center transition-all group-hover:border-indigo-500 group-hover:bg-slate-800/50 bg-slate-900/30 h-48 flex flex-col items-center justify-center gap-3">
+                                    <div
+                                        class="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg">
+                                        <svg xmlns="http://www.w3.org/2000/svg"
+                                            class="h-6 w-6 text-gray-400 group-hover:text-indigo-400 transition-colors"
+                                            fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                        </svg>
+                                    </div>
+                                    <div class="space-y-1">
+                                        <p id="file-label-text"
+                                            class="text-base font-medium text-slate-300 group-hover:text-white transition-colors">
+                                            Tap to upload video
+                                        </p>
+                                        <p class="text-xs text-slate-500 uppercase tracking-wider font-semibold">
+                                            MP4, MOV, AVI
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Submit Button -->
+                            <button type="submit"
+                                class="btn-submit w-full group relative overflow-hidden bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-4 rounded-xl shadow-xl shadow-indigo-900/20 transition-all active:scale-[0.98]">
+                                <span class="relative z-10 flex items-center justify-center gap-2 text-lg">
+                                    <span>Magic Generate</span>
                                     <svg xmlns="http://www.w3.org/2000/svg"
-                                        class="h-6 w-6 text-gray-400 group-hover:text-indigo-400 transition-colors"
-                                        fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                        class="h-5 w-5 group-hover:rotate-12 transition-transform" viewBox="0 0 20 20"
+                                        fill="currentColor">
+                                        <path fill-rule="evenodd"
+                                            d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z"
+                                            clip-rule="evenodd" />
                                     </svg>
+                                </span>
+                                <div
+                                    class="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300">
                                 </div>
-                                <div class="space-y-1">
-                                    <p id="file-label-text"
-                                        class="text-base font-medium text-slate-300 group-hover:text-white transition-colors">
-                                        Tap to upload video
-                                    </p>
-                                    <p class="text-xs text-slate-500 uppercase tracking-wider font-semibold">
-                                        MP4, MOV, AVI
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Submit Button -->
-                        <button type="submit"
-                            class="btn-submit w-full group relative overflow-hidden bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-4 rounded-xl shadow-xl shadow-indigo-900/20 transition-all active:scale-[0.98]">
-                            <span class="relative z-10 flex items-center justify-center gap-2 text-lg">
-                                <span>Magic Generate</span>
-                                <svg xmlns="http://www.w3.org/2000/svg"
-                                    class="h-5 w-5 group-hover:rotate-12 transition-transform" viewBox="0 0 20 20"
-                                    fill="currentColor">
-                                    <path fill-rule="evenodd"
-                                        d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z"
-                                        clip-rule="evenodd" />
-                                </svg>
-                            </span>
-                            <!-- Button Glow Effect -->
-                            <div
-                                class="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300">
-                            </div>
-                        </button>
-                    </form>
-                </div>
-
-                <!-- Queue Status Indicator (outside form container so it stays visible) -->
-                <div class="mt-4 text-center">
-                    <div id="queue-status-display" hx-get="/queue-status" hx-trigger="load, every 5s"
-                        hx-swap="innerHTML">
-                        <div class="inline-flex items-center gap-2 text-xs text-slate-500">
-                            <div class="animate-pulse">⏳</div>
-                            <span>Loading queue status...</span>
-                        </div>
+                            </button>
+                        </form>
                     </div>
                 </div>
-
-                <!-- Results Container -->
-                <div id="resultado" class="mt-8 empty:mt-0 transition-all"></div>
-
+                {% endif %}
             </div>
 
-            <!-- Footer -->
-            <footer class="text-center text-slate-600 text-sm pb-8">
+            <!-- Footer & Global Stats -->
+            <footer class="text-center text-slate-600 text-sm pb-8 space-y-2">
+                <!-- Global Queue Stats (Updated by SSE) -->
+                <div id="global-stats"
+                    class="text-xs text-slate-500 transition-opacity duration-500 opacity-60 hover:opacity-100">
+                    <span id="global-active">-</span> active jobs
+                </div>
                 <p class="flex items-center justify-center gap-1">
                     Powered by <span class="text-slate-400 font-semibold">UkeAI</span>
                 </p>
@@ -118,6 +114,32 @@
 
         </div>
     </main>
+
+    <!-- Global SSE Handler -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log("🔌 Connecting to Unified SSE Stream...");
+            const evtSource = new EventSource("/events");
+
+            evtSource.addEventListener("queue_status", (e) => {
+                const data = JSON.parse(e.data);
+                // Update global stats footer
+                const statsEl = document.getElementById("global-active");
+                if (statsEl) statsEl.textContent = data.active_jobs;
+            });
+
+            // We dispatch custom events for job progress so the partial can listen to them
+            evtSource.addEventListener("job_progress", (e) => {
+                const data = JSON.parse(e.data);
+                const event = new CustomEvent('job-progress', { detail: data });
+                document.dispatchEvent(event);
+            });
+
+            evtSource.onerror = (e) => {
+                // console.log("SSE Reconnecting...");
+            };
+        });
+    </script>
 </body>
 
 </html>
