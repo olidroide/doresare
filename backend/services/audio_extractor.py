@@ -136,7 +136,9 @@ def extract_audio_from_video(video_file: str, output_dir: Optional[str] = None, 
             fd, path = tempfile.mkstemp(suffix='.wav')
             os.close(fd)
             
-        video.audio.write_audiofile(path, logger=None)
+        print(f"🎵 Writing audio to (PCM 16-bit, 44.1kHz): {path}")
+        # Optimize for speed: 16-bit writes faster than float, 44100 is standard
+        video.audio.write_audiofile(path, codec='pcm_s16le', fps=44100, logger=None, verbose=False)
         video.close()
         return path
     except Exception as e:
@@ -219,16 +221,15 @@ def load_global_model():
         
         # Validate model file existence and integrity
         # Validate model file existence and integrity
-        # Using UVR-MDX-NET-Inst_1.onnx (Lightest possible model)
-        model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_1.onnx')
+        # Using UVR_MDXNET_KARA_2.onnx (Lightest possible model)
+        model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR_MDXNET_KARA_2.onnx')
         
         # J3455 SAFETY OVERRIDE:
-        # If user accidentally configured a heavy model (UVR-MDX-NET-Inst_1 is also heavy n_fft=7680), 
-        # force switch to Inst_1 for speed.
-        if 'HQ' in model_name or 'Main' in model_name or 'Kim_Vocal' in model_name:
-            print(f"⚠️ DETECTED HEAVY MODEL CONFIGURATION: {model_name}")
-            print("🚀 FORCING 'UVR-MDX-NET-Inst_1.onnx' override for MAX SPEED!")
-            model_name = 'UVR-MDX-NET-Inst_1.onnx'
+        # Force switch to Kara_2 for speed if heavy models are detected.
+        if 'HQ' in model_name or 'Main' in model_name or 'Kim_Vocal' in model_name or 'Inst_1' in model_name:
+            print(f"⚠️ DETECTED HEAVY/SLOW MODEL CONFIGURATION: {model_name}")
+            print("🚀 FORCING 'UVR_MDXNET_KARA_2.onnx' override for MAX SPEED!")
+            model_name = 'UVR_MDXNET_KARA_2.onnx'
             
         if not model_name.endswith('.onnx'):
             model_name += '.onnx'
@@ -350,13 +351,13 @@ def separate_audio_ai(
                 
                 # Load model (heavy op)
                 # Load model (heavy op)
-                model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_1.onnx')
+                model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR_MDXNET_KARA_2.onnx')
                 
                 # J3455 SAFETY OVERRIDE (Per-request instance)
-                if 'HQ' in model_name or 'Main' in model_name or 'Kim_Vocal' in model_name:
+                if 'HQ' in model_name or 'Main' in model_name or 'Kim_Vocal' in model_name or 'Inst_1' in model_name:
                     print(f"⚠️ DETECTED HEAVY MODEL CONFIGURATION (Per-request): {model_name}")
-                    print("🚀 FORCING 'UVR-MDX-NET-Inst_1.onnx' override!")
-                    model_name = 'UVR-MDX-NET-Inst_1.onnx'
+                    print("🚀 FORCING 'UVR_MDXNET_KARA_2.onnx' override!")
+                    model_name = 'UVR_MDXNET_KARA_2.onnx'
                     
                 if not model_name.endswith('.onnx'):
                     model_name += '.onnx'
@@ -573,7 +574,7 @@ def separate_with_openvino_wrapper(input_file: str, output_dir: Optional[str] = 
         model = model_path or os.getenv('OPENVINO_MODEL_PATH') or os.getenv('OPENVINO_MODEL', None)
         if not model:
             # Default to converted model location inside image
-            model = os.path.join('/app/models_openvino', os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_1.onnx').rsplit('.', 1)[0] + '.xml')
+            model = os.path.join('/app/models_openvino', os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR_MDXNET_KARA_2.onnx').rsplit('.', 1)[0] + '.xml')
         device = os.getenv('OPENVINO_DEVICE', 'CPU')
         precision = os.getenv('OPENVINO_PRECISION', 'FP16')
 

@@ -26,9 +26,9 @@ try:
     separator = Separator(log_level=logging.INFO, model_file_dir=model_dir)
     
     # Load the specific model used in the pipeline
-    # Using UVR-MDX-NET-Inst_1 model for MAXIMUM speed on low-power device
+    # Using UVR_MDXNET_KARA_2.onnx model for MAXIMUM speed on low-power device
     # Can be overridden with AUDIO_SEPARATOR_MODEL environment variable
-    model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_1.onnx')
+    model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR_MDXNET_KARA_2.onnx')
     print(f"⬇️ Downloading model: {model_name}")
     separator.load_model(model_filename=model_name)
     
