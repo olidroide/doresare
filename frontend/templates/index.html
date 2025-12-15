@@ -49,8 +49,21 @@
                         <form hx-post="/process" hx-encoding="multipart/form-data" hx-target="#main-container"
                             hx-swap="innerHTML" hx-indicator="#loading" class="space-y-6">
 
+                            <!-- Input Method Toggle -->
+                            <div
+                                class="flex justify-center mb-2 bg-slate-800/50 p-1 rounded-xl max-w-fit mx-auto backdrop-blur-sm">
+                                <button type="button" onclick="toggleInput('file')" id="tab-file"
+                                    class="px-6 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-indigo-600 text-white shadow-lg shadow-indigo-500/20">
+                                    Upload Video
+                                </button>
+                                <button type="button" onclick="toggleInput('url')" id="tab-url"
+                                    class="px-6 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-white transition-all duration-200">
+                                    YouTube URL
+                                </button>
+                            </div>
+
                             <!-- File Upload Drop Zone -->
-                            <div class="group relative">
+                            <div id="input-file" class="group relative transition-all duration-300">
                                 <input type="file" name="file" accept=".mp4,.mov,.avi" required
                                     class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20">
 
@@ -74,6 +87,30 @@
                                             MP4, MOV, AVI
                                         </p>
                                     </div>
+                                </div>
+                            </div>
+
+                            <!-- URL Input (Hidden by default) -->
+                            <div id="input-url" class="hidden transition-all duration-300">
+                                <div class="h-48 flex flex-col items-center justify-center gap-2">
+                                    <label for="video_url" class="text-slate-300 font-medium self-start ml-1">Paste
+                                        YouTube URL</label>
+                                    <div class="relative w-full group">
+                                        <div
+                                            class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                            <svg xmlns="http://www.w3.org/2000/svg"
+                                                class="h-5 w-5 text-slate-500 group-focus-within:text-red-500 transition-colors"
+                                                fill="currentColor" viewBox="0 0 24 24">
+                                                <path
+                                                    d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zm-10.615 12.816v-8l8 3.993-8 4.007z" />
+                                            </svg>
+                                        </div>
+                                        <input type="url" name="video_url" id="video_url"
+                                            placeholder="https://www.youtube.com/watch?v=..."
+                                            class="w-full bg-slate-900/50 border-2 border-slate-700/50 rounded-xl py-4 pl-12 pr-4 text-white placeholder-slate-500 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-all shadow-inner">
+                                    </div>
+                                    <p class="text-xs text-slate-500 mt-2 text-center w-full">Supports YouTube, standard
+                                        video URLs, and more.</p>
                                 </div>
                             </div>
 
@@ -114,6 +151,47 @@
 
         </div>
     </main>
+
+    <!-- UI Interactions -->
+    <script>
+        function toggleInput(type) {
+            const fileInput = document.getElementById('input-file');
+            const urlInput = document.getElementById('input-url');
+            const tabFile = document.getElementById('tab-file');
+            const tabUrl = document.getElementById('tab-url');
+            const fileField = document.querySelector('input[name="file"]');
+            const urlField = document.querySelector('input[name="video_url"]');
+
+            if (type === 'file') {
+                fileInput.classList.remove('hidden');
+                urlInput.classList.add('hidden');
+
+                tabFile.classList.add('bg-indigo-600', 'text-white', 'shadow-lg');
+                tabFile.classList.remove('text-slate-400');
+
+                tabUrl.classList.remove('bg-indigo-600', 'text-white', 'shadow-lg');
+                tabUrl.classList.add('text-slate-400');
+
+                fileField.required = true;
+                urlField.value = '';
+                urlField.required = false;
+            } else {
+                fileInput.classList.add('hidden');
+                urlInput.classList.remove('hidden');
+
+                tabUrl.classList.add('bg-indigo-600', 'text-white', 'shadow-lg');
+                tabUrl.classList.remove('text-slate-400');
+
+                tabFile.classList.remove('bg-indigo-600', 'text-white', 'shadow-lg');
+                tabFile.classList.add('text-slate-400');
+
+                fileField.required = false;
+                fileField.value = '';
+                urlField.required = true;
+                setTimeout(() => urlField.focus(), 100);
+            }
+        }
+    </script>
 
     <!-- Global SSE Handler -->
     <script>

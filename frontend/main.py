@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Request, HTTPException, Response, Cookie, Depends
+from fastapi import FastAPI, UploadFile, File, Request, HTTPException, Response, Cookie, Depends, BackgroundTasks, Form
 from fastapi.responses import HTMLResponse, StreamingResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -11,6 +11,7 @@ import json
 import asyncio
 from typing import Optional, Dict
 from config import settings, Environment
+import yt_dlp
 
 app = FastAPI()
 
@@ -30,6 +31,84 @@ jobs: Dict[str, dict] = {}
 
 # user_active_job: user_id -> job_id (Only one active job per user)
 user_active_job: Dict[str, str] = {}
+
+
+def download_video_task(url: str, job_id: str):
+    """
+    Background task to download video from YouTube/URL.
+    Updates job status in-place.
+    """
+    try:
+        print(f"⬇️ Starting download for Job {job_id} URL: {url}")
+        
+        # Define progress hook
+        def progress_hook(d):
+            if d['status'] == 'downloading':
+                try:
+                    p = d.get('_percent_str', '0%').replace('%','')
+                    jobs[job_id]["download_progress"] = float(p)
+                except Exception:
+                    pass
+            elif d['status'] == 'finished':
+                jobs[job_id]["download_progress"] = 100
+
+        # Configure yt-dlp
+        # We save to STATIC_DIR temporarily or a temp dir? 
+        # Using tempfile logic from handle_file might be safer but yt-dlp needs a path.
+        # Let's use a temp dir.
+        import tempfile
+        temp_dir = tempfile.gettempdir()
+        
+        ydl_opts = {
+            'format': 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720]',
+            'outtmpl': os.path.join(temp_dir, f'dw_{job_id}_%(title)s.%(ext)s'),
+            'progress_hooks': [progress_hook],
+            'noplaylist': True,
+            'quiet': True,
+            'overwrites': True,
+            'nocheckcertificate': True,
+        }
+
+        filename = "downloaded_video"
+        temp_path = None
+
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            # secure_filename = ydl.prepare_filename(info)
+            # prepare_filename returns the template applied, but actual file might be different if merged?
+            # 'requested_downloads' usually contains the final file path
+            if 'requested_downloads' in info:
+                temp_path = info['requested_downloads'][0]['filepath']
+            else:
+                temp_path = ydl.prepare_filename(info)
+            
+            filename = os.path.basename(temp_path)
+            
+        print(f"✅ Download complete: {temp_path}")
+        
+        # Update Job State
+        jobs[job_id]["filename"] = filename
+        jobs[job_id]["temp_file"] = temp_path
+        jobs[job_id]["status"] = "queued" # Transitions to queued for backend submission
+        
+        # Submit to Backend
+        client = get_client()
+        print(f"🚀 Submitting job for {filename}...")
+        
+        input_val = handle_file(temp_path)
+        job = client.submit(
+            input_video=input_val,
+            api_name="/predict"
+        )
+        
+        # Update job object
+        jobs[job_id]["job"] = job
+        
+    except Exception as e:
+        print(f"❌ Download Error: {e}")
+        jobs[job_id]["status"] = "error"
+        jobs[job_id]["error_message"] = f"Download failed: {str(e)}"
+
 
 
 # --- Dependencies ---
@@ -108,7 +187,7 @@ async def home(request: Request):
     })
 
 @app.post("/process")
-async def process(request: Request, video_url: str = None, file: UploadFile = File(None)):
+async def process(request: Request, background_tasks: BackgroundTasks, video_url: str = Form(None), file: UploadFile = File(None)):
     """
     Submit a video for processing.
     User is limited to 1 active job.
@@ -143,10 +222,35 @@ async def process(request: Request, video_url: str = None, file: UploadFile = Fi
             input_val = handle_file(temp_path)
             print(f"🚀 Saved temp file to {temp_path}")
         elif video_url:
-            pass
+            # URL Processing Flow
+            job_id = str(uuid.uuid4())
+            jobs[job_id] = {
+                "job": None, # Will be set after download
+                "filename": "Downloading...",
+                "start_time": time.time(),
+                "temp_file": None,
+                "status": "downloading",
+                "user_id": user_id,
+                "download_progress": 0
+            }
+            user_active_job[user_id] = job_id
+            
+            # Start Background Task
+            background_tasks.add_task(download_video_task, video_url, job_id)
+            
+            # Return Partial
+            template_name = "process.html"
+            if request.headers.get("HX-Request"):
+                template_name = "partials/process_content.html"
+
+            return templates.TemplateResponse(template_name, {
+                "request": request,
+                "job_id": job_id,
+                "filename": "Resolving URL..."
+            })
 
         if not input_val:
-             raise HTTPException(status_code=400, detail="No file uploaded")
+             raise HTTPException(status_code=400, detail="No file uploaded or URL provided")
 
         # Connect and Submit
         client = get_client()
@@ -223,7 +327,7 @@ async def events(request: Request):
                     job_data = jobs[active_job_id]
                     job = job_data["job"]
                     
-                    if job.done():
+                    if job and job.done():
                         # Handle completion logic here (once)
                         if job_data["status"] != "done":
                              try:
@@ -258,7 +362,29 @@ async def events(request: Request):
                                  data = {"type": "error", "error_message": str(e)}
                                  yield f"event: job_progress\ndata: {json.dumps(data)}\n\n"
                                  del user_active_job[user_id]
-                    else:
+                                 yield f"event: job_progress\ndata: {json.dumps(data)}\n\n"
+                                 del user_active_job[user_id]
+                    
+                    elif job_data["status"] == "downloading":
+                        # Downloading Phase
+                        progress = job_data.get("download_progress", 0)
+                        data = {
+                            "type": "progress",
+                            "progress": progress,
+                            "status": "Downloading Video...",
+                            "detail": f"{progress:.1f}%",
+                            "position": "-",
+                            "queue_size": str(len(jobs))
+                        }
+                        yield f"event: job_progress\ndata: {json.dumps(data)}\n\n"
+                        
+                    elif job_data["status"] == "error":
+                         # Error happened during download or other sync steps
+                         data = {"type": "error", "error_message": job_data.get("error_message", "Unknown error")}
+                         yield f"event: job_progress\ndata: {json.dumps(data)}\n\n"
+                         del user_active_job[user_id]
+
+                    elif job: # Regular Gradio Job Running
                         # Job Running
                         status = job.status()
                         
@@ -282,6 +408,24 @@ async def events(request: Request):
                             
                             if idx is not None and length is not None:
                                 detail = f"{idx} / {length} {unit}"
+                            
+                            # Clean up desc (remove generic 0% - 100%)
+                            if desc:
+                                import re
+                                # Remove " 1%" or " 100%" or " (Frame ...)" if it exists
+                                # If desc is "Rendering video: 1% (Frame 60/4583)"
+                                # We want status="Rendering video" and detail="Frame 60/4583" (if detail is empty)
+                                
+                                # 1. Extract potential detail from desc if detail is empty
+                                if not detail:
+                                    frame_match = re.search(r'\((Frame.*?)\)', desc)
+                                    if frame_match:
+                                        detail = frame_match.group(1)
+                                
+                                # 2. Remove percentage and parens from status
+                                desc = re.sub(r'\s*\d+%', '', desc) # Remove 1%
+                                desc = re.sub(r'\s*\(Frame.*?\)', '', desc) # Remove (Frame...) if we extracted it or not
+                                desc = desc.strip().rstrip(':')
 
                         # Calculate queue pos
                         status_code_str = str(status.code)
