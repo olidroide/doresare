@@ -5,7 +5,10 @@ trigger: always_on
 # Project Rules and Instructions
 
 ## Project Overview
-This project is a Ukulele Chord Video Generator. It takes a video file as input, extracts audio, detects chords, and overlays the chords on the video.
+For detailed architecture, component specifications, and setup instructions, please refer to the [README.md](../../README.md).
+
+**Summary**:
+This project is a Ukulele Chord Video Generator. It takes a video file as input or video from youtube url, extracts audio, detects chords, and overlays the chords on the video.
 - **Backend**: Python (FastAPI, Gradio, MoviePy, Librosa). Deployed on Hugging Face Spaces.
 - **Frontend**: Python (FastAPI, Jinja2), HTML/CSS (Tailwind), HTMX, SSE.
 
@@ -13,27 +16,9 @@ This project is a Ukulele Chord Video Generator. It takes a video file as input,
 - **Package Manager**: `uv` (Universal Python Package Installer).
 - **Backend Framework**: FastAPI (with Gradio for internal tools/demos).
 - **Frontend Framework**: FastAPI serving HTML templates.
-- **Styling**: Tailwind CSS.
+- **Styling**: Tailwind CSS 4.
 - **Interactivity**: HTMX (v2.0.8), Server-Sent Events (SSE) (htmx-ext-sse v2.2.4).
-- **Deployment**: Hugging Face Spaces (Docker).
-
-## Key Conventions
-- **Language**: All code, comments, variables, and documentation MUST be in English.
-- **Path Handling**: Use `pathlib` for cross-platform compatibility.
-- **Logging**: Use descriptive print statements or a logger (English messages).
-
-## Coding Standards
-- **Language**: Python 3.12+
-- **Style**: Follow PEP 8.
-- **Type Hinting**: Use strict type hinting for all function signatures.
-
-## SOLID Principles
-- **Single Responsibility Principle (SRP)**: Each class or module should have one, and only one, reason to change.
-- **Open/Closed Principle (OCP)**: Software entities should be open for extension, but closed for modification.
-- **Liskov Substitution Principle (LSP)**: Subtypes must be substitutable for their base types.
-- **Interface Segregation Principle (ISP)**: Clients should not be forced to depend on interfaces they do not use.
-- **Dependency Inversion Principle (DIP)**: High-level modules should not depend on low-level modules. Both should depend on abstractions.
-- **Dependency Injection**: Pass dependencies (like `FileManager`) explicitly to functions/classes rather than creating them inside.
+- **Deployment**: Hugging Face Spaces (Docker) or Local using uv or Home Server Intel J3455.
 
 ## Error Handling
 - **Exceptions**: Use exceptions for error handling rather than returning error codes or None (unless 'None' is a valid result).
@@ -55,10 +40,3 @@ This project is a Ukulele Chord Video Generator. It takes a video file as input,
 - `backend/`: Core logic for video processing, chord detection, and API.
 - `frontend/`: User-facing web application.
 - `video_processing/`: Temporary directory for processing artifacts (cleaned up automatically).
-
-## Hardware Constraints (Intel J3455)
-Critically important rules for maintenance on this specific low-end hardware:
-1.  **NO AVX**: The CPU does NOT support AVX instructions. **Do not upgrade** dependencies (especially `onnxruntime` or `audio-separator`) to versions that drop non-AVX support without verifying.
-2.  **Monkey Patching is Required**: `librosa.load` MUST be patched to `sr=None` in `audio_extractor.py`, otherwise audio loading hangs for 40s.
-3.  **Model Constraints**: `UVR_MDXNET_KARA_2.onnx` is the primary model. Heavier models cause timeouts.
-4.  **GPU Acceleration**: OpenVINO is forced via `ONNXRUNTIME_EXECUTION_PROVIDERS`. QSV is used for video via `jellyfin-ffmpeg`. Do not revert to standard `ffmpeg`.

@@ -1,20 +1,38 @@
 # Musical Note and Chord Extractor
 
-This project is a web application to detect chords in music videos and generate a new video with the chords overlaid.
+**Doresare** is an AI-powered application that generates ukulele chord video overlays. It automates the process of extracting audio from music videos, detecting chords using AI, and rendering visually synchronized chord diagrams onto the original video.
 
 ## Architecture
 
-The project is divided into two main components:
+The system is designed with a decoupled architecture to manage resource-intensive tasks effectively on constrained hardware.
 
-1.  **Backend (Python/Gradio)**:
-    *   Handles heavy processing: audio extraction, source separation (AI), chord detection, and video rendering.
-    *   Exposes an API via Gradio Client.
-    *   Designed to be deployed on Hugging Face Spaces (Docker).
+-   **Frontend**: Lightweight user interface for uploads and status monitoring.
+-   **Backend**: Heavy processing unit for AI inference and video rendering.
 
-2.  **Frontend (FastAPI/Jinja2/HTMX)**:
-    *   Modern and reactive web user interface.
-    *   Communicates with the backend to submit jobs and receive real-time status updates via SSE (Server-Sent Events).
-    *   Can run locally or on any cloud server.
+### Component Specifications
+
+#### 1. Frontend
+**Technology Stack**:
+-   **Framework**: FastAPI (serving Jinja2 templates)
+-   **Interactivity**: HTMX + Server-Sent Events (SSE)
+-   **Styling**: Tailwind CSS 4
+
+**Key Requirements**:
+-   **Smart Validation**: Strict validation for file size and video validity *before* processing to prevent resource exhaustion.
+-   **Real-Time Status Tracking**: SSE channels to display Queue Position and granular progress (e.g., "Separating Audio", "Rendering Video").
+-   **Future Capabilities**: YouTube URL integration (using `yt-dlp`).
+
+#### 2. Backend
+**Technology Stack**:
+-   **Framework**: FastAPI (API) + Gradio (Demos/Internal Tools)
+-   **Core Libraries**: Librosa, MoviePy, OnnxRuntime, audio-separator
+
+**Key Requirements**:
+-   **Processing Pipeline**:
+    -   Input: Video Files (and later URLs).
+    -   AI Audio Processing: Source separation and chord detection.
+    -   Video Generation: Render output with overlaid chord graphics.
+-   **Concurrency**: Strict queuing system due to high CPU/GPU usage per task.
 
 ### Architecture Diagram
 
@@ -28,6 +46,17 @@ graph TD
     Frontend -->|SSE Updates| User
     Frontend -->|Final Video| User
 ```
+
+## Non-Functional Requirements & Constraints
+
+### Hardware Constraints
+-   **Target Hardware**: Intel J3455 (Low-power Celeron).
+-   **Instruction Set Limits**: **NO AVX Support**. AI models and runtime (OnnxRuntime) must be compatible with non-AVX CPUs.
+-   **Acceleration**: Must utilize OpenVINO for AI inference and Intel QSV (via ffmpeg/jellyfin-ffmpeg) for video encoding where possible.
+
+### Performance & UX
+-   **Long-Running Processes**: Processing times can be significant. The UI must keep the user engaged or informed.
+-   **Stability**: The backend must handle timeouts and failures gracefully without leaking resources.
 
 ## Project Structure
 
@@ -137,4 +166,3 @@ Use this option to run everything (Backend + Frontend + Nginx) on the EC2 instan
 - **Nginx**: Reverse proxy listening on port 80.
 - **Frontend**: FastAPI app serving the UI (internal port 8000).
 - **Backend**: (In Dev mode) FastAPI/Gradio app processing videos (internal port 7860).
-```
