@@ -1,26 +1,24 @@
-import gradio as gr
-import os
-import sys
-import time
 
 from functools import partial
-from services.pipeline import generate_video
+
+import gradio as gr
 from services.file_manager import default_file_manager
 from services.font_manager import FontManager
+from services.pipeline import generate_video
+
 
 def process_video(input_video, font_manager: FontManager, progress=gr.Progress()):
     """
     Main function to be called by Gradio.
-    Receives the path of the uploaded video, processes it, and returns the path of the generated video.
+    Receives either a local video path or YouTube URL.
     """
     if not input_video:
         print("⚠️ Received empty input_video")
         return None
         
-    print(f"🚀 START PROCESSING. Received video: {input_video}")
+    print(f"🚀 START PROCESSING. Received input: {input_video}")
     
     # Cleanup old files (> 3 minutes)
-    # Frontend downloads video immediately, so files can be cleaned up quickly
     default_file_manager.cleanup_old_files(max_age_seconds=60*3)
 
     try:
@@ -32,9 +30,8 @@ def process_video(input_video, font_manager: FontManager, progress=gr.Progress()
                 pass
 
         # Call our pipeline with explicit dependency injection
-        # The pipeline now handles output path generation
         output_path = generate_video(
-            input_video, 
+            input_video,  # Can be file path or URL
             file_manager=default_file_manager, 
             progress=progress_wrapper,
             font_manager=font_manager
@@ -47,26 +44,60 @@ def process_video(input_video, font_manager: FontManager, progress=gr.Progress()
         print(f"❌ CRITICAL ERROR in backend processing: {e}")
         import traceback
         traceback.print_exc()
-        # In case of error, Gradio will show the message
         raise gr.Error(f"Internal backend error: {str(e)}")
+
 
 def create_app(font_manager: FontManager):
     """
     Creates and returns the Gradio application instance.
+    Now with YouTube URL support.
     """
     # Inject dependencies using partial
     process_with_deps = partial(process_video, font_manager=font_manager)
 
-    # Define Gradio interface
-    iface = gr.Interface(
-        fn=process_with_deps,
-        inputs=gr.File(label="Upload Video (MP4)"),
-        outputs=gr.File(label="Generated Video"),
-        title="Ukulele Chord Video Generator (Backend)",
-        description="Backend API to generate videos with ukulele chords. Internal use.",
-        flagging_mode="never"
-    )
-
-    app = gr.TabbedInterface([iface], ["Generator"]).queue()
+    # Define Gradio interface with combined input
+    with gr.Blocks(title="Doresare Backend") as app:
+        gr.Markdown("""
+        # 🎸 Ukulele Chord Video Generator (Backend)
+        
+        Upload a video file or paste a YouTube URL to generate a video with chord overlays.
+        """)
+        
+        with gr.Row():
+            with gr.Column():
+                gr.Markdown("### File Upload")
+                file_input = gr.File(label="Upload Video (MP4)", file_count="single")
+            
+            with gr.Column():
+                gr.Markdown("### Or YouTube URL")
+                url_input = gr.Textbox(
+                    label="YouTube URL",
+                    placeholder="https://www.youtube.com/watch?v=...",
+                    lines=1
+                )
+        
+        output_video = gr.File(label="Generated Video")
+        submit_btn = gr.Button("Process Video", variant="primary")
+        
+        def process_input(file_input_val, url_input_val):
+            """Determine which input to use and process it"""
+            # Prioritize file upload if both are provided
+            if file_input_val:
+                print("Using uploaded file")
+                return process_with_deps(file_input_val)
+            elif url_input_val:
+                print("Using YouTube URL")
+                return process_with_deps(url_input_val)
+            else:
+                raise gr.Error("Please provide either a file or YouTube URL")
+        
+        submit_btn.click(
+            fn=process_input,
+            inputs=[file_input, url_input],
+            outputs=output_video
+        )
+    
+    app.queue()
     return app
+    
 
