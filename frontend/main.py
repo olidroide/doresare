@@ -280,11 +280,23 @@ async def events(request: Request):
                                 if original.startswith("http"):
                                     output_filename = f"processed_{uuid.uuid4().hex}{ext}"
                                 else:
-                                    safe_base = re.sub(r'[^A-Za-z0-9_.-]', '_', os.path.basename(original))
-                                    # Ensure extension exists
-                                    if not os.path.splitext(safe_base)[1]:
-                                        safe_base = safe_base + ext
-                                    output_filename = f"processed_{safe_base}"
+                                    # Build a safe filename: keep extension if valid, but disallow dots
+                                    # inside the base name to avoid traversal or trick filenames.
+                                    base = os.path.basename(original)
+                                    name, orig_ext = os.path.splitext(base)
+                                    # Normalize and validate extension
+                                    orig_ext = (orig_ext or ext).lower()
+                                    if not re.match(r'^\.[a-z0-9]{1,6}$', orig_ext):
+                                        orig_ext = ext
+
+                                    # Allow only alphanumerics, dash and underscore in the base name
+                                    safe_name = re.sub(r'[^A-Za-z0-9_-]', '_', name)
+
+                                    # If name is empty or contains suspicious sequences, fall back to UUID
+                                    if (not safe_name) or ('..' in safe_name) or safe_name.startswith('..') or safe_name.endswith('..'):
+                                        safe_name = uuid.uuid4().hex
+
+                                    output_filename = f"processed_{safe_name}{orig_ext}"
 
                                 final_path = os.path.join(STATIC_DIR, output_filename)
 
