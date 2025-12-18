@@ -28,6 +28,9 @@ def check_connectivity():
         print(f"❌ Connectivity Error: {e}")
         return False
 
+# Initialize services
+font_manager = FontManager()
+
 # Run startup checks to ensure environment is ready
 print("🚀 Initializing backend services...")
 check_connectivity()
