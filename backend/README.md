@@ -184,6 +184,58 @@ Notes & tips:
 
 If you want, the repository can be updated to set `MOVIEPY_USE_GPU=false` by default (safer) and provide a one-line toggle in `.env.doresare-backend` to enable GPU when the host is validated.
 
+### Hugging Face build flag (`HF_deploy`)
+
+When building the Docker image you can pass a single build argument `HF_deploy` to make the image "aware" it's intended for Hugging Face Spaces.
+
+Behavior when `HF_deploy=true`:
+- The image sets environment variable `HF_DEPLOY=true` inside the container.
+- AI audio separation remains enabled by default, but the backend will prefer a lightweight model (`UVR_MDXNET_KARA_2.onnx`) to improve chances of successful runs on Spaces.
+- The backend will skip pre-loading heavy global models at startup to reduce cold-start resource use; separation will load per-request as needed.
+
+Build example for HF Spaces (selects safe defaults):
+```bash
+DOCKER_BUILDKIT=1 docker build -t doresare-backend:hf --build-arg HF_deploy=true backend/
+```
+
+Alternative using `DEPLOY_ENV` (recommended for clarity):
+```bash
+DOCKER_BUILDKIT=1 docker build -t doresare-backend:hf --build-arg DEPLOY_ENV=HF backend/
+```
+
+You can also combine both build-args if desired:
+```bash
+DOCKER_BUILDKIT=1 docker build -t doresare-backend:hf --build-arg HF_deploy=true --build-arg DEPLOY_ENV=HF backend/
+```
+
+If you want to change separation behavior on HF, override these runtime environment variables when launching the container in your Space:
+
+- `AUDIO_SEPARATOR_MODEL` — set a different model filename (e.g. `UVR-MDX-NET-Inst_HQ_3.onnx`).
+- `SKIP_AUDIO_SEPARATION` — set to `true` to disable separation if you prefer.
+
+Example (override to a heavier model — may fail on small instances):
+```bash
+# At runtime: set environment variables in your Space settings or via the container runtime
+export AUDIO_SEPARATOR_MODEL=UVR-MDX-NET-Inst_HQ_3.onnx
+export SKIP_AUDIO_SEPARATION=false
+```
+
+Recommendation — set `DEPLOY_ENV=HF` in the Space UI
+
+For clarity and predictable presets, we recommend setting `DEPLOY_ENV=HF` in your Space settings (UI) under
+Settings → Environment variables. This ensures the container and the app use the HF preset (lightweight model, no global preload).
+
+Steps in the Hugging Face Spaces UI:
+
+1. Open your Space and go to `Settings`.
+2. Locate `Environment variables` and add a new variable:
+
+   - Key: `DEPLOY_ENV`
+   - Value: `HF`
+
+3. (Optional) Add `AUDIO_SEPARATOR_MODEL` if you want another default model, e.g. `UVR-MDX-NET-Inst_HQ_3.onnx`.
+
+After saving, the Space will rebuild/restart and the app will apply the HF presets automatically.
 ## Low-End Hardware Optimization (Intel J3455/NUC/Atom)
 
 For users running on older Intel hardware (like **Celeron J3455**, Apollo Lake, or Atom CPUs) which **lack AVX instructions**, specific optimizations are applied:

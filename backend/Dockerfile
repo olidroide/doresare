@@ -29,14 +29,21 @@ COPY README.md .
 ENV UV_COMPILE_BYTECODE=1
 ENV UV_LINK_MODE=copy
 ARG USE_OPENVINO=false
+ARG ENV=LOCAL
+
+# If ENV is INTEL_LOW_SERVER, we force USE_OPENVINO to true
+RUN if [ "$ENV" = "INTEL_LOW_SERVER" ]; then \
+    export USE_OPENVINO=true; \
+    fi
 
 RUN --mount=type=cache,target=/root/.cache/uv \
-    if [ "$USE_OPENVINO" = "true" ]; then \
-    echo "🚀 Building with OpenVINO support..."; \
+    if [ "$USE_OPENVINO" = "true" ] || [ "$ENV" = "INTEL_LOW_SERVER" ]; then \
+    echo "🚀 Building for environment: $ENV (OpenVINO support enabled)..."; \
     uv remove --no-sync onnxruntime || true; \
     uv add --no-sync onnxruntime-openvino; \
     uv sync --no-install-project; \
     else \
+    echo "🚀 Building for environment: $ENV..."; \
     uv sync --frozen --no-install-project; \
     fi
 
@@ -51,7 +58,7 @@ COPY download_models.py .
 
 RUN --mount=type=cache,target=/root/.cache/pip \
     --mount=type=cache,target=/root/.cache/uv \
-    if [ "$USE_OPENVINO" = "true" ]; then \
+    if [ "$USE_OPENVINO" = "true" ] || [ "$ENV" = "INTEL_LOW_SERVER" ]; then \
         set -e; \
         echo "⬇️ Pre-downloading models in builder stage..."; \
         /app/.venv/bin/python download_models.py; \
@@ -84,6 +91,7 @@ RUN mkdir -p /app/models_openvino
 # Stage 2: Runtime
 FROM python:3.12-slim-bookworm
 ARG USE_OPENVINO=false
+ARG ENV=LOCAL
 
 # Enable apt caching
 RUN rm -f /etc/apt/apt.conf.d/docker-clean; echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
@@ -99,7 +107,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     curl -fsSL https://repo.jellyfin.org/jellyfin_team.gpg.key | gpg --dearmor -o /etc/apt/keyrings/jellyfin.gpg && \
     echo "deb [signed-by=/etc/apt/keyrings/jellyfin.gpg] https://repo.jellyfin.org/debian bookworm main" > /etc/apt/sources.list.d/jellyfin.list && \
     apt-get update && \
-    if [ "$USE_OPENVINO" = "true" ]; then \
+    if [ "$USE_OPENVINO" = "true" ] || [ "$ENV" = "INTEL_LOW_SERVER" ]; then \
         echo "🔧 Installing VA drivers and Jellyfin FFmpeg for OpenVINO/QSV..." && \
         apt-get install -y \
             jellyfin-ffmpeg6 \
@@ -140,7 +148,8 @@ ENV HOME=/home/user \
     ORT_DISABLE_TELEMETRY=1 \
     SKIP_AUDIO_SEPARATION=false \
     AUDIO_SEPARATION_TIMEOUT=300 \
-    AUDIO_SEPARATOR_MODEL_DIR=/home/user/models
+    AUDIO_SEPARATOR_MODEL_DIR=/home/user/models \
+    ENV=${ENV}
 
 # Create model directory and ensure ownership
 RUN mkdir -p $AUDIO_SEPARATOR_MODEL_DIR && \
