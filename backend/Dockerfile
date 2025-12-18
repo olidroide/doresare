@@ -96,19 +96,17 @@ ARG ENV=LOCAL
 # Enable apt caching
 RUN rm -f /etc/apt/apt.conf.d/docker-clean; echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
 
-# Install runtime dependencies
+# Install runtime dependencies (Consolidated and Conditional)
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     apt-get update && \
-    # Install dependencies for adding repo
     apt-get install -y curl gnupg ca-certificates && \
-    # Add Jellyfin repo (Gold standard for FFmpeg HW support)
     mkdir -p /etc/apt/keyrings && \
     curl -fsSL https://repo.jellyfin.org/jellyfin_team.gpg.key | gpg --dearmor -o /etc/apt/keyrings/jellyfin.gpg && \
     echo "deb [signed-by=/etc/apt/keyrings/jellyfin.gpg] https://repo.jellyfin.org/debian bookworm main" > /etc/apt/sources.list.d/jellyfin.list && \
     apt-get update && \
-    if [ "$USE_OPENVINO" = "true" ] || [ "$ENV" = "INTEL_LOW_SERVER" ]; then \
-        echo "🔧 Installing VA drivers and Jellyfin FFmpeg for OpenVINO/QSV..." && \
+    if [ "$ENV" = "INTEL_LOW_SERVER" ]; then \
+        echo "🔧 Installing VA drivers and Jellyfin FFmpeg for Intel hardware (QSV)..." && \
         apt-get install -y \
             jellyfin-ffmpeg6 \
             libsndfile1 \
@@ -120,11 +118,10 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
             i965-va-driver \
             libmfx1 \
             ocl-icd-libopencl1 && \
-        # Symlink Jellyfin FFmpeg to standard path
         ln -sf /usr/lib/jellyfin-ffmpeg/ffmpeg /usr/local/bin/ffmpeg && \
         ln -sf /usr/lib/jellyfin-ffmpeg/ffprobe /usr/local/bin/ffprobe; \
     else \
-        echo "ℹ️ Installing runtime minimal packages (no OpenVINO)..." && \
+        echo "ℹ️ Installing runtime minimal packages for $ENV..." && \
         apt-get install -y \
             ffmpeg \
             libsndfile1 \
@@ -135,8 +132,9 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     fi
 
 # Set up non-root user for Hugging Face Spaces
-# Add to video and render groups for hardware access
+# Add to video and render groups for hardware access (ensure groups exist)
 RUN useradd -m -u 1000 user && \
+    groupadd -f render && \
     usermod -aG video,render user || true
 ENV HOME=/home/user \
     PATH=/home/user/.local/bin:$PATH \

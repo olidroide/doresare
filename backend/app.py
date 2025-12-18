@@ -12,11 +12,25 @@ from interface.gradio_ui import create_app
 from services import audio_extractor
 from services.font_manager import FontManager
 
-# Initialize services
-font_manager = FontManager()
+def check_connectivity():
+    """Diagnostic check for network connectivity, specifically for YouTube."""
+    import socket
+    target = "www.youtube.com"
+    print(f"🌐 Connectivity check: Resolving '{target}'...")
+    try:
+        addr = socket.gethostbyname(target)
+        print(f"✅ DNS Success: '{target}' resolved to {addr}")
+        return True
+    except socket.gaierror as e:
+        print(f"❌ DNS Failure: Could not resolve '{target}': {e}")
+        return False
+    except Exception as e:
+        print(f"❌ Connectivity Error: {e}")
+        return False
 
 # Run startup checks to ensure environment is ready
 print("🚀 Initializing backend services...")
+check_connectivity()
 try:
     font_manager.check_resources()
     audio_extractor.check_resources()

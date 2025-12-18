@@ -117,17 +117,23 @@ class YouTubeDownloader:
         ydl_opts = {
             "format": YouTubeDownloader.FORMAT_STRING,
             "outtmpl": os.path.join(output_path, "%(title)s.%(ext)s"),
-            "quiet": False,
-            "no_warnings": False,
-            "socket_timeout": timeout_seconds,
             "progress_hooks": [progress_hook],
-            # WARNING: Disables SSL certificate verification. Use only for debugging or
-            # in environments where certificate chain validation fails and you accept the risk.
-            # This is equivalent to the CLI flag `--no-check-certificate`.
-            "nocheckcertificate": True,
+            # Network and Connectivity optimizations
+            "source_address": "0.0.0.0",  # Force IPv4
+            "geo_bypass": True,
+            "nocheckcertificate": True,   # Disables SSL certificate verification
+            "http_headers": {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-us,en;q=0.5",
+                "Sec-Fetch-Mode": "navigate",
+            },
             # Security and compatibility
             "restrictfilenames": True,
             "noplaylist": True,  # Don't download playlists, just the video
+            "quiet": False,
+            "no_warnings": False,
+            "socket_timeout": timeout_seconds,
         }
 
         try:
