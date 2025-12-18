@@ -2,6 +2,7 @@
 import logging
 import os
 import re
+import socket
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -184,6 +185,31 @@ class YouTubeDownloader:
                 return video_path
 
         except yt_dlp.utils.DownloadError as e:
+            # Inspect the exception chain for name resolution / DNS errors
+            cause = e
+            dns_issue = False
+            while cause:
+                try:
+                    if isinstance(cause, socket.gaierror):
+                        dns_issue = True
+                        break
+                except Exception:
+                    pass
+                if "Failed to resolve" in str(cause) or "NameResolutionError" in str(cause):
+                    dns_issue = True
+                    break
+                cause = getattr(cause, "__cause__", None)
+
+            if dns_issue:
+                enhanced = (
+                    "YouTube download error: name resolution failed (DNS). "
+                    "This environment may block outbound network/DNS lookups. "
+                    "Workarounds: upload the video file via the UI, set `HTTP_PROXY`/`HTTPS_PROXY` in your Space settings, "
+                    "or enable outbound network access for the Hugging Face Space."
+                )
+                print(f"❌ {enhanced}")
+                raise Exception(enhanced) from e
+
             error_msg = f"YouTube download error: {e}"
             print(f"❌ {error_msg}")
             raise Exception(error_msg) from e
