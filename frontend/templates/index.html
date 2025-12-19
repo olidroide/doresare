@@ -48,6 +48,8 @@
                     <div id="upload-form-container">
                         <form hx-post="/process" hx-encoding="multipart/form-data" hx-target="#main-container"
                             hx-swap="innerHTML" hx-indicator="#loading" class="space-y-6">
+                            <!-- HTMX indicator target (hidden by default) -->
+                            <div id="loading" class="hidden" aria-hidden="true">Loading...</div>
 
                             <!-- Input Method Toggle -->
                             <div

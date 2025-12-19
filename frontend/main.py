@@ -8,6 +8,11 @@ import uuid
 from typing import Dict, Optional
 
 from config import Environment, settings
+from use_cases.download_video import (
+    DownloadError,
+    RequiresFFmpegError,
+    download_video_stream,
+)
 from fastapi import (
     BackgroundTasks,
     Cookie,
@@ -159,35 +164,90 @@ async def process(request: Request, background_tasks: BackgroundTasks, video_url
             input_val = handle_file(temp_path)
             print(f"🚀 Saved temp file to {temp_path}")
         elif video_url:
-            # URL Processing Flow: submit URL directly to backend (backend handles download)
-            client = get_client()
-            print(f"🚀 Submitting URL job for {video_url}...")
-
-            # Submit URL directly; backend pipeline expects two inputs: (file_input, url_input)
-            # Provide None for the file_input and the URL as the second positional argument.
-            job = client.submit(None, video_url, fn_index=0)
-
+            # Create a job entry to report download progress via SSE
             job_id = str(uuid.uuid4())
             jobs[job_id] = {
-                "job": job,
+                "job": None,
                 "filename": video_url,
                 "start_time": time.time(),
                 "temp_file": None,
-                "status": "queued",
-                "user_id": user_id
+                "status": "downloading",
+                "progress": 0,
+                "user_id": user_id,
             }
             user_active_job[user_id] = job_id
 
-            # Return Partial
-            template_name = "process.html"
-            if request.headers.get("HX-Request"):
-                template_name = "partials/process_content.html"
+            try:
+                # Stream download updates
+                async for status in download_video_stream(video_url, max_height=720):
+                    if isinstance(status, int):
+                        jobs[job_id]["status"] = "downloading"
+                        jobs[job_id]["progress"] = status
+                    elif hasattr(status, "exists"):  # It's a Path object
+                        temp_path = str(status)
+                        filename = os.path.basename(temp_path)
 
-            return templates.TemplateResponse(template_name, {
-                "request": request,
-                "job_id": job_id,
-                "filename": video_url
-            })
+                        # Prepare file for upload to backend
+                        input_val = handle_file(temp_path)
+                        client = get_client()
+                        print(f"🚀 Uploading downloaded file {temp_path} to backend...")
+
+                        job = client.submit(input_val, "", fn_index=0)
+
+                        jobs[job_id].update(
+                            {
+                                "job": job,
+                                "filename": filename,
+                                "start_time": time.time(),
+                                "temp_file": temp_path,
+                                "status": "queued",
+                            }
+                        )
+
+                        # We uploaded the file; delete local copy to save space
+                        try:
+                            if os.path.exists(temp_path):
+                                os.remove(temp_path)
+                        except Exception:
+                            pass
+
+                        # Return Partial immediately after submitting to backend
+                        template_name = "process.html"
+                        if request.headers.get("HX-Request"):
+                            template_name = "partials/process_content.html"
+
+                        return templates.TemplateResponse(
+                            template_name,
+                            {
+                                "request": request,
+                                "job_id": job_id,
+                                "filename": filename,
+                            },
+                        )
+
+                # If we exit loop without returning, fail
+                raise HTTPException(status_code=500, detail="Download did not complete")
+
+            except RequiresFFmpegError as e:
+                hint = (
+                    "This video requires ffmpeg to merge separate streams. "
+                    "Rebuild the frontend Docker image with build-arg INSTALL_JELLYFIN_FFMPEG=true."
+                )
+                jobs[job_id]["status"] = "error"
+                return templates.TemplateResponse(
+                    "partials/error.html",
+                    {
+                        "request": request,
+                        "error_message": f"Download failed: {e}. {hint}",
+                    },
+                )
+
+            except DownloadError as e:
+                jobs[job_id]["status"] = "error"
+                return templates.TemplateResponse(
+                    "partials/error.html",
+                    {"request": request, "error_message": f"Download failed: {e}"},
+                )
 
         if not input_val:
              raise HTTPException(status_code=400, detail="No file uploaded or URL provided")
@@ -263,7 +323,20 @@ async def events(request: Request):
                 if active_job_id and active_job_id in jobs:
                     # Fetch Job Info
                     job_data = jobs[active_job_id]
-                    job = job_data["job"]
+
+                    # If this is a frontend download-in-progress, expose its progress
+                    if job_data.get("status") == "downloading":
+                        data = {
+                            "type": "progress",
+                            "progress": int(job_data.get("progress", 0)),
+                            "status": "Downloading",
+                            "detail": "",
+                        }
+                        yield f"event: job_progress\ndata: {json.dumps(data)}\n\n"
+                        await asyncio.sleep(1)
+                        continue
+
+                    job = job_data.get("job")
                     
                     if job and job.done():
                         # Handle completion logic here (once)

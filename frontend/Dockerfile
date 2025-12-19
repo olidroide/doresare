@@ -1,5 +1,6 @@
 # Stage 1: Builder
 FROM python:3.12-slim-bookworm AS builder
+ARG INSTALL_JELLYFIN_FFMPEG=false
 
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
@@ -33,6 +34,11 @@ RUN useradd -m -u 1000 user
 RUN chown -R user:user /app
 USER user
 
+USER root
+RUN if [ "${INSTALL_JELLYFIN_FFMPEG}" = "true" ]; then \
+            apt-get update && apt-get install -y --no-install-recommends jellyfin-ffmpeg && rm -rf /var/lib/apt/lists/*; \
+        fi
+USER user
 # Copy virtual environment from builder
 COPY --from=builder --chown=user:user /app/.venv /app/.venv
 
