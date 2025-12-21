@@ -543,21 +543,25 @@ async def events(request: Request):
 
 
                         # Fallback ETA Calculation if rank_eta is missing
+                        wait_percent = 0
+                        if queue_pos_int is not None:
+                            # Descending bar logic: 
+                            # If pos=1, bar is (100 - active_progress) / 100
+                            # If pos=2, bar is (200 - active_progress) / 200
+                            # This creates a depleting bar that feels real.
+                            active_p = global_progress or 0
+                            wait_units_left = (queue_pos_int - 1) * 100 + (100 - active_p)
+                            wait_total_units = queue_pos_int * 100
+                            wait_percent = (wait_units_left / wait_total_units) * 100
+
                         if rank_eta is None and queue_pos_int is not None:
-                            # Use a more realistic base time of 5-10 mins depending on position
-                            # Most songs are 3-4 mins, processing on CPU is approx 1.5x - 2x length
-                            # Let's assume 400s as a safer average than a flat 600s
+                            # Assume average processing time of 8 minutes (480s)
                             base_avg = 480 
-                            
-                            # If we have global progress of the current job, subtract it from the wait
                             active_rem = base_avg * (1 - (global_progress or 0) / 100)
-                            
-                            # Total ETA = (Remaining time of current) + (Others in front * average)
                             rank_eta = active_rem + (queue_pos_int - 1) * base_avg
 
                         if rank_eta is not None:
-                            # Ensure we don't show suspiciously perfect rounded numbers like "10m 0s"
-                            # by adding a slight jitter or just being precise
+                            # Precise calculation
                             eta_seconds = int(rank_eta)
                             if eta_seconds > 0:
                                 if eta_seconds >= 60:
@@ -576,9 +580,11 @@ async def events(request: Request):
                             "queue_size": str(len(jobs)),
                             "eta": eta_formatted,
                             "eta_seconds": int(rank_eta) if rank_eta is not None else None,
+                            "wait_percent": wait_percent,
                             "global_progress": global_progress,
                             "active_job_status": active_job_status
                         }
+
                         yield f"event: job_progress\ndata: {json.dumps(data)}\n\n"
                 
                 # Sleep

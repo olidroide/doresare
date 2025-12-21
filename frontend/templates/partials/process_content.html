@@ -191,7 +191,7 @@
         let lastEtaSeconds = 0;
         let countdownInterval = null;
 
-        function updateEtaDisplay(seconds) {
+        function updateEtaDisplay(seconds, serverWaitPercent) {
             if (seconds <= 0) {
                 queueEta.textContent = "Very soon...";
                 waitBarFill.style.width = "0%";
@@ -201,20 +201,25 @@
             const s = seconds % 60;
             queueEta.textContent = `${m}m ${s}s`;
 
-            // Wait Bar logic: We assume max wait is around 15 mins (900s) for the visual bar
-            const percent = Math.min(100, (seconds / 900) * 100);
-            waitBarFill.style.width = `${percent}%`;
+            // Wait Bar logic: Use server-calculated wait_percent if available,
+            // otherwise fallback to a generic countdown percentage
+            if (serverWaitPercent !== undefined && serverWaitPercent !== null) {
+                waitBarFill.style.width = `${serverWaitPercent}%`;
+            } else {
+                const percent = Math.min(100, (seconds / 900) * 100);
+                waitBarFill.style.width = `${percent}%`;
+            }
         }
 
         function startCountdown(seconds) {
             clearInterval(countdownInterval);
             lastEtaSeconds = seconds;
-            updateEtaDisplay(lastEtaSeconds);
+            updateEtaDisplay(lastEtaSeconds, null);
 
             countdownInterval = setInterval(() => {
                 if (lastEtaSeconds > 0) {
                     lastEtaSeconds--;
-                    updateEtaDisplay(lastEtaSeconds);
+                    updateEtaDisplay(lastEtaSeconds, null); // Manual countdown doesn't know latest wait_percent
                 } else {
                     clearInterval(countdownInterval);
                 }
@@ -249,8 +254,11 @@
                     // ETA update with local countdown
                     if (data.eta_seconds !== null && data.eta_seconds !== undefined) {
                         etaContainer.classList.remove('hidden');
-                        // Only restart countdown if the difference is significant (> 10s) 
-                        // to avoid jitter, or if it's the first time
+
+                        // Always update display with latest server data if available
+                        updateEtaDisplay(data.eta_seconds, data.wait_percent);
+
+                        // Only restart local countdown if the difference is significant
                         if (Math.abs(lastEtaSeconds - data.eta_seconds) > 10 || lastEtaSeconds === 0) {
                             startCountdown(data.eta_seconds);
                         }
