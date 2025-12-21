@@ -174,9 +174,14 @@ def generate_video(
                     pipeline_progress = 0.2 + (current_sep_progress * 0.2)
                     pipeline_progress = min(0.39, pipeline_progress)
                     pct_display = int(current_sep_progress * 100)
-                    desc_str = f"Separating audio with AI ({pct_display}%)..."
+                    
+                    # Format a professional status string for SSE
+                    status_base = "Separating audio with AI"
                     if detail_str:
-                        desc_str = f"Separating audio with AI ({pct_display}%) - {detail_str}"
+                         desc_str = f"{status_base} | {detail_str}"
+                    else:
+                         desc_str = f"{status_base} ({pct_display}%)"
+                         
                     progress(pipeline_progress, desc=desc_str)
 
             sep_thread.join(timeout=1)

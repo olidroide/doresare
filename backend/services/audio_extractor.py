@@ -450,17 +450,20 @@ def separate_audio_ai(
             # Wrapper to update shared progress state with logging
             last_logged_callback_pct = [-10]  # Track last logged pct in callback
             
-            def internal_progress_callback(pct):
+            def internal_progress_callback(pct, detail=""):
                 last_progress[0] = pct
                 
                 # Log every 10% for Docker visibility
                 pct_int = int(pct * 100)
                 if pct_int >= last_logged_callback_pct[0] + 10:
-                    print(f"🎵 Audio separation progress: {pct_int}% (via callback)", flush=True)
+                    print(f"🎵 Audio separation progress: {pct_int}% {detail} (via callback)", flush=True)
                     last_logged_callback_pct[0] = pct_int
                 
                 if progress_callback:
-                    progress_callback(pct)
+                    try:
+                        progress_callback(pct, detail=detail)
+                    except TypeError:
+                        progress_callback(pct)
             
             # Separate capturing stderr for progress
             print(f"⤵️ Calling separator.separate({input_file})...", flush=True)

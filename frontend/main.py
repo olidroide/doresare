@@ -460,22 +460,26 @@ async def events(request: Request):
                             if idx is not None and length is not None:
                                 detail = f"{idx} / {length} {unit}"
                             
-                            # Clean up desc (remove generic 0% - 100%)
+                            # Clean up desc and extract detail
                             if desc:
-                                # Remove " 1%" or " 100%" or " (Frame ...)" if it exists
-                                # If desc is "Rendering video: 1% (Frame 60/4583)"
-                                # We want status="Rendering video" and detail="Frame 60/4583" (if detail is empty)
+                                # 1. Extract detail if desc contains "|" or "-"
+                                if not detail:
+                                    if " | " in desc:
+                                        desc, detail = desc.split(" | ", 1)
+                                    elif " - " in desc:
+                                        desc, detail = desc.split(" - ", 1)
 
-                                # 1. Extract potential detail from desc if detail is empty
+                                # 2. Extract potential detail from desc if detail is still empty (Frame info)
                                 if not detail:
                                     frame_match = re.search(r'\((Frame.*?)\)', desc)
                                     if frame_match:
                                         detail = frame_match.group(1)
 
-                                # 2. Remove percentage and parens from status
-                                desc = re.sub(r'\s*\d+%', '', desc) # Remove 1%
-                                desc = re.sub(r'\s*\(Frame.*?\)', '', desc) # Remove (Frame...) if we extracted it or not
-                                desc = desc.strip().rstrip(':')
+                                # 3. Clean status text: remove percentage, empty parens, and trailing colons
+                                desc = re.sub(r'\s*\d+%', '', desc) # Remove " 82%"
+                                desc = re.sub(r'\s*\(Frame.*?\)', '', desc) # Remove "(Frame...)"
+                                desc = re.sub(r'\s*\(\)', '', desc) # Remove empty "()"
+                                desc = desc.strip().rstrip(':').strip()
 
                         # Calculate queue pos
                         # ... (Queue logic simplified for brevity, same as before)
