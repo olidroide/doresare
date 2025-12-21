@@ -145,8 +145,8 @@
             <footer class="text-center text-slate-600 text-sm pb-8 space-y-2">
                 <!-- Global Queue Stats (Updated by SSE) -->
                 <div id="global-stats"
-                    class="text-xs text-slate-500 transition-opacity duration-500 opacity-60 hover:opacity-100">
-                    <span id="global-active">-</span> active jobs
+                    class="text-xs text-slate-500 transition-opacity duration-500 opacity-60 hover:opacity-100 uppercase tracking-widest font-mono">
+                    <span id="queue-status-msg">Connecting...</span>
                 </div>
                 <p class="flex items-center justify-center gap-1">
                     Powered by <span class="text-slate-400 font-semibold">UkeAI</span>
@@ -206,8 +206,8 @@
             evtSource.addEventListener("queue_status", (e) => {
                 const data = JSON.parse(e.data);
                 // Update global stats footer
-                const statsEl = document.getElementById("global-active");
-                if (statsEl) statsEl.textContent = data.active_jobs;
+                const statsEl = document.getElementById("queue-status-msg");
+                if (statsEl) statsEl.textContent = data.message;
             });
 
             // We dispatch custom events for job progress so the partial can listen to them

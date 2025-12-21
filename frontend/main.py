@@ -343,8 +343,16 @@ async def events(request: Request):
             while True:
                 # 1. Global Queue Stats
                 active_count = sum(1 for j in jobs.values() if j.get("status") in ["queued", "running", "downloading"])
+                
+                if active_count == 0:
+                    message = "Server free"
+                else:
+                    queue_size = active_count - 1
+                    message = f"1 job active / {queue_size} in queue"
+
                 queue_data = {
                     "active_jobs": active_count,
+                    "message": message,
                     "status": "busy" if active_count > 0 else "available"
                 }
                 yield f"event: queue_status\ndata: {json.dumps(queue_data)}\n\n"
