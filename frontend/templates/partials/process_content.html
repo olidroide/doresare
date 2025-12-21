@@ -78,8 +78,12 @@
                 </div>
             </div>
 
+            <!-- Ad Banner (Monetization) -->
+            {% include 'partials/ad_banner.html' %}
+
             <!-- Result Video Placeholder -->
             {% include 'partials/video_result.html' %}
+
         </div>
     </div>
 
@@ -189,6 +193,11 @@
                 if (data.video_url) {
                     const videoContainer = container.querySelector('#video-result-container');
                     const videoPlayer = container.querySelector('#result-video');
+                    const adContainer = container.querySelector('#ad-banner-container');
+
+                    if (adContainer) {
+                        adContainer.classList.add('hidden');
+                    }
 
                     if (videoContainer && videoPlayer) {
                         videoPlayer.src = data.video_url;
