@@ -203,8 +203,8 @@
                     statusDetail.textContent = '';
                 }
 
-                // Queue logic
-                if (data.position && data.position !== 'Processing' && data.position !== '-') {
+                // Queue logic: Only show for users who are actually waiting (position > 1)
+                if (data.position && data.position !== 'Processing' && data.position !== '-' && data.position !== '1') {
                     queueContainer.classList.remove('hidden');
                     queuePos.textContent = data.position;
                     queueSize.textContent = data.queue_size;

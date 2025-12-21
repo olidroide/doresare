@@ -362,25 +362,32 @@ async def events(request: Request):
                 now = time.time()
                 if now - global_heartbeat_cache["time"] > 1.0:
                     found_active = False
-                    for other_job_id, other_data in list(jobs.items()):
-                        if other_data.get("status") == "running" and other_data.get("job"):
-                            try:
-                                other_status = other_data["job"].status()
-                                if other_status.progress_data:
-                                    p_unit = other_status.progress_data[-1]
-                                    if p_unit.progress is not None:
-                                        global_heartbeat_cache["progress"] = int(p_unit.progress * 100)
-                                        s_text = p_unit.desc or "Processing..."
-                                        global_heartbeat_cache["status"] = re.sub(r'\s*\d+%', '', s_text).strip().rstrip(':').strip()
-                                        global_heartbeat_cache["time"] = now
-                                        found_active = True
-                                        break
-                            except Exception:
-                                pass 
+                    if active_jobs_list:
+                        top_job_id = active_jobs_list[0]
+                        top_other_data = jobs.get(top_job_id)
+                        if top_other_data:
+                            if top_other_data.get("status") == "downloading":
+                                global_heartbeat_cache["progress"] = int(top_other_data.get("progress", 0))
+                                global_heartbeat_cache["status"] = "Downloading..."
+                                global_heartbeat_cache["time"] = now
+                                found_active = True
+                            elif top_other_data.get("status") == "running" and top_other_data.get("job"):
+                                try:
+                                    other_status = top_other_data["job"].status()
+                                    if other_status.progress_data:
+                                        p_unit = other_status.progress_data[-1]
+                                        if p_unit.progress is not None:
+                                            global_heartbeat_cache["progress"] = int(p_unit.progress * 100)
+                                            s_text = p_unit.desc or "Processing..."
+                                            global_heartbeat_cache["status"] = re.sub(r'\s*\d+%', '', s_text).strip().rstrip(':').strip()
+                                            global_heartbeat_cache["time"] = now
+                                            found_active = True
+                                except Exception:
+                                    pass 
                     
                     if not found_active:
                         global_heartbeat_cache["progress"] = None
-                        global_heartbeat_cache["status"] = "No active jobs."
+                        global_heartbeat_cache["status"] = "Preparing..." if active_count > 0 else "No active jobs."
                         global_heartbeat_cache["time"] = now
 
                 global_p = global_heartbeat_cache["progress"]
@@ -395,26 +402,28 @@ async def events(request: Request):
 
                     # 3. Unified Queue Info for THIS user
                     queue_pos_int = None
-                    queue_pos = "-"
-                    wait_percent = 0
+                    queue_pos = None
+                    wait_percent = None
                     rank_eta_val = None
                     eta_formatted = ""
 
                     try:
                         if active_job_id in active_jobs_list:
                             queue_pos_int = active_jobs_list.index(active_job_id) + 1
-                            queue_pos = str(queue_pos_int)
                             
-                            # Wait Progress calculation (Depleting bar)
-                            active_p = global_p or 0
-                            wait_units_left = (queue_pos_int - 1) * 100 + (100 - active_p)
-                            wait_total_units = queue_pos_int * 100
-                            wait_percent = (wait_units_left / wait_total_units) * 100
+                            if queue_pos_int > 1:
+                                queue_pos = str(queue_pos_int)
+                                
+                                # Wait Progress calculation (Depleting bar)
+                                active_p = global_p or 0
+                                wait_units_left = (queue_pos_int - 1) * 100 + (100 - active_p)
+                                wait_total_units = queue_pos_int * 100
+                                wait_percent = (wait_units_left / wait_total_units) * 100
 
-                            # Fallback ETA
-                            avg_time = 480 
-                            active_rem = avg_time * (1 - (active_p / 100))
-                            rank_eta_val = active_rem + (queue_pos_int - 1) * avg_time
+                                # Fallback ETA
+                                avg_time = 480 
+                                active_rem = avg_time * (1 - (active_p / 100))
+                                rank_eta_val = active_rem + (queue_pos_int - 1) * avg_time
                     except Exception as e:
                         print(f"⚠️ Error calculating queue stats: {e}")
 
@@ -425,7 +434,7 @@ async def events(request: Request):
                             "status": "Downloading",
                             "detail": job_data.get("detail", ""),
                             "position": queue_pos,
-                            "queue_size": str(active_count),
+                            "queue_size": str(active_count) if queue_pos else None,
                             "wait_percent": wait_percent,
                             "global_progress": global_p,
                             "active_job_status": active_s
@@ -558,7 +567,7 @@ async def events(request: Request):
                         # Prefer Gradio actual rank/eta if provided by the backend
                         if "QUEUE" in str(status.code) and status.rank is not None:
                              queue_pos_int = status.rank + 1
-                             queue_pos = str(queue_pos_int)
+                             queue_pos = str(queue_pos_int) if queue_pos_int > 1 else None
                         
                         rank_eta_gradio = getattr(status, "rank_eta", None)
                         if rank_eta_gradio is not None:
@@ -580,7 +589,7 @@ async def events(request: Request):
                             "status": desc,
                             "detail": detail,
                             "position": queue_pos,
-                            "queue_size": str(active_count),
+                            "queue_size": str(active_count) if queue_pos else None,
                             "eta": eta_formatted,
                             "eta_seconds": int(rank_eta_val) if rank_eta_val is not None else None,
                             "wait_percent": wait_percent,
