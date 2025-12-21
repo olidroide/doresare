@@ -180,9 +180,20 @@ async def process(request: Request, background_tasks: BackgroundTasks, video_url
             try:
                 # Stream download updates
                 async for status in download_video_stream(video_url, max_height=720):
-                    if isinstance(status, int):
+                    if isinstance(status, (int, float)):
                         jobs[job_id]["status"] = "downloading"
-                        jobs[job_id]["progress"] = status
+                        jobs[job_id]["progress"] = int(status)
+                    elif isinstance(status, dict):
+                        # Rich progress update
+                        jobs[job_id]["status"] = "downloading"
+                        jobs[job_id]["progress"] = int(status["pct"])
+                        
+                        # Format detail
+                        total_mb = status["total"] / (1024 * 1024) if status["total"] else 0
+                        downloaded_mb = status["downloaded"] / (1024 * 1024) if status["downloaded"] else 0
+                        speed_mb = (status["speed"] or 0) / (1024 * 1024)
+                        
+                        jobs[job_id]["detail"] = f"{downloaded_mb:.1f} / {total_mb:.1f} MB ({speed_mb:.1f} MB/s)"
                     elif hasattr(status, "exists"):  # It's a Path object
                         temp_path = str(status)
                         filename = os.path.basename(temp_path)
@@ -258,7 +269,12 @@ async def process(request: Request, background_tasks: BackgroundTasks, video_url
         
         # Submit (file upload). The backend expects two inputs: (file_input, url_input)
         # Provide the file value first and an empty string for the URL input.
-        job = client.submit(input_val, "", fn_index=0)
+        try:
+             job = client.submit(input_val, "", fn_index=0)
+        except Exception as client_err:
+             print(f"❌ Client submit failed: {client_err}")
+             # If submission fails, we must catch it here to avoid hanging
+             raise client_err
         
         job_id = str(uuid.uuid4())
         jobs[job_id] = {
@@ -285,12 +301,29 @@ async def process(request: Request, background_tasks: BackgroundTasks, video_url
         })
 
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"❌ Error in process endpoint: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        # Ensure we clean up the job entry so it doesn't hang in "downloading"
+        if 'job_id' in locals() and job_id in jobs:
+             jobs[job_id]["status"] = "error"
+             jobs[job_id]["error_message"] = str(e)
+             
+        if 'user_id' in locals() and user_id in user_active_job:
+            # Only remove if it matches our current job to avoid race conditions
+            if user_active_job[user_id] == locals().get('job_id'):
+                del user_active_job[user_id]
+
         if temp_path and os.path.exists(temp_path):
-             os.remove(temp_path)
+             try:
+                os.remove(temp_path)
+             except:
+                pass
+                
         return templates.TemplateResponse("partials/error.html", {
             "request": request,
-            "error_message": str(e)
+            "error_message": f"Processing failed: {str(e)}"
         })
 
 # --- Unified SSE Endpoint ---
@@ -310,7 +343,7 @@ async def events(request: Request):
         try:
             while True:
                 # 1. Global Queue Stats
-                active_count = len(jobs)
+                active_count = sum(1 for j in jobs.values() if j.get("status") in ["queued", "running", "downloading"])
                 queue_data = {
                     "active_jobs": active_count,
                     "status": "busy" if active_count > 0 else "available"
@@ -330,10 +363,10 @@ async def events(request: Request):
                             "type": "progress",
                             "progress": int(job_data.get("progress", 0)),
                             "status": "Downloading",
-                            "detail": "",
+                            "detail": job_data.get("detail", ""),
                         }
                         yield f"event: job_progress\ndata: {json.dumps(data)}\n\n"
-                        await asyncio.sleep(1)
+                        await asyncio.sleep(0.2) # Fast updates for downloading
                         continue
 
                     job = job_data.get("job")

@@ -134,10 +134,11 @@ class VideoDownloader:
                 raise RequiresFFmpegError(str(e)) from e
             raise DownloadError(str(e)) from e
 
-    async def download_stream(self, url: str) -> AsyncGenerator[int | Path, None]:
+    async def download_stream(self, url: str) -> AsyncGenerator[dict | int | Path, None]:
         """Asynchronous wrapper for the download process with progress tracking."""
         loop = asyncio.get_running_loop()
-        queue: asyncio.Queue[int] = asyncio.Queue()
+        loop = asyncio.get_running_loop()
+        queue: asyncio.Queue[dict | int] = asyncio.Queue()
 
         def progress_hook(d: dict[str, Any]) -> None:
             try:
@@ -145,8 +146,17 @@ class VideoDownloader:
                     total = d.get("total_bytes") or d.get("total_bytes_estimate")
                     downloaded = d.get("downloaded_bytes", 0)
                     if total:
-                        pct = int(downloaded * 100 / total)
-                        loop.call_soon_threadsafe(queue.put_nowait, pct)
+                        pct = float(downloaded * 100 / total)
+                        
+                        # Create rich info
+                        info = {
+                            "pct": pct,
+                            "downloaded": downloaded,
+                            "total": total,
+                            "speed": d.get("speed"),
+                            "eta": d.get("eta")
+                        }
+                        loop.call_soon_threadsafe(queue.put_nowait, info)
                 elif d.get("status") == "finished":
                     loop.call_soon_threadsafe(queue.put_nowait, 100)
             except Exception:
@@ -164,9 +174,14 @@ class VideoDownloader:
         while not download_task.done():
             try:
                 pct = await asyncio.wait_for(queue.get(), timeout=0.2)
-                if pct > last_pct:
+                if isinstance(pct, (int, float)):
+                    if pct > last_pct:
+                        yield pct
+                        last_pct = pct
+                elif isinstance(pct, dict):
+                    # Always yield dict updates
                     yield pct
-                    last_pct = pct
+                    last_pct = pct["pct"]
             except asyncio.TimeoutError:
                 continue
             except Exception: # Catch any other unexpected errors in the queue processing
@@ -178,7 +193,7 @@ class VideoDownloader:
 
 async def download_video_stream(
     url: str, max_height: int = 720
-) -> AsyncGenerator[int | Path, None]:
+) -> AsyncGenerator[dict | int | Path, None]:
     """Shortcut function to use the VideoDownloader service."""
     downloader = VideoDownloader(max_height=max_height)
     async for item in downloader.download_stream(url):
