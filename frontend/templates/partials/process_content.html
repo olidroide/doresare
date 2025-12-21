@@ -62,14 +62,6 @@
                 </div>
             </div>
 
-            <!-- Result Video -->
-            <div id="video-container"
-                class="hidden mt-6 rounded-2xl overflow-hidden shadow-2xl border border-white/10 relative group">
-                <video id="result-video" controls class="w-full bg-black/50">
-                    <source src="" type="video/mp4">
-                </video>
-            </div>
-
             <!-- Queue Info (Hidden by default) -->
             <div id="queue-container" class="hidden text-center transform transition-all">
                 <div
@@ -86,165 +78,155 @@
                 </div>
             </div>
 
-            <!-- Actions -->
-            <div id="actions" class="hidden text-center mt-4">
-                <a id="download-btn" href="#"
-                    class="inline-flex items-center justify-center px-8 py-4 border border-indigo-500/50 text-lg font-bold rounded-xl text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 shadow-[0_0_20px_rgba(79,70,229,0.4)] hover:shadow-[0_0_30px_rgba(168,85,247,0.6)] transition-all transform hover:-translate-y-1 group">
-                    <span>Download Video</span>
-                    <span class="ml-2 group-hover:rotate-12 transition-transform">🚀</span>
-                </a>
-                <a href="/"
-                    class="block mt-6 text-sm text-slate-400 hover:text-white transition-colors border-b border-transparent hover:border-slate-400 inline-block pb-0.5">Process
-                    Another Video</a>
-            </div>
-        </div>
-
-        <!-- Error Container -->
-        <div id="error-container" class="hidden text-center space-y-6 py-4">
-            <div class="relative w-20 h-20 mx-auto">
-                <div class="absolute inset-0 bg-red-500/20 rounded-full animate-ping"></div>
-                <div
-                    class="relative flex items-center justify-center w-full h-full bg-red-500/10 rounded-full border border-red-500/50 text-4xl">
-                    ⚠️</div>
-            </div>
-
-            <div class="space-y-2">
-                <h3 class="text-xl font-bold text-white">Processing Failed</h3>
-                <p id="error-msg"
-                    class="text-red-300 text-sm bg-red-950/30 p-3 rounded-lg border border-red-500/20 mx-auto max-w-xs break-words">
-                    Unknown error.</p>
-            </div>
-
-            <button onclick="window.location.reload()"
-                class="px-6 py-2 bg-slate-700 text-white font-medium rounded-lg hover:bg-slate-600 transition-colors border border-white/5">
-                Retry Connection
-            </button>
-            <a href="/" class="block mt-4 text-xs text-slate-500 hover:text-white uppercase tracking-wider">Return
-                Home</a>
+            <!-- Result Video Placeholder -->
+            {% include 'partials/video_result.html' %}
         </div>
     </div>
 
-    <script>
-        (function () {
-            const container = document.getElementById('process-container');
-            const jobId = "{{ job_id }}";
+    <!-- Error Container -->
+    <div id="error-container" class="hidden text-center space-y-6 py-4">
+        <div class="relative w-20 h-20 mx-auto">
+            <div class="absolute inset-0 bg-red-500/20 rounded-full animate-ping"></div>
+            <div
+                class="relative flex items-center justify-center w-full h-full bg-red-500/10 rounded-full border border-red-500/50 text-4xl">
+                ⚠️</div>
+        </div>
 
-            console.log(`🔌 INIT Process View for Job: ${jobId}`);
+        <div class="space-y-2">
+            <h3 class="text-xl font-bold text-white">Processing Failed</h3>
+            <p id="error-msg"
+                class="text-red-300 text-sm bg-red-950/30 p-3 rounded-lg border border-red-500/20 mx-auto max-w-xs break-words">
+                Unknown error.</p>
+        </div>
 
-            // Update URL if needed
-            if (!window.location.pathname.includes(jobId) && !window.location.pathname.includes("process")) {
-                try {
-                    window.history.pushState({}, '', `/process/${jobId}`);
-                } catch (e) { console.warn("History push failed", e); }
-            }
+        <button onclick="window.location.reload()"
+            class="px-6 py-2 bg-slate-700 text-white font-medium rounded-lg hover:bg-slate-600 transition-colors border border-white/5">
+            Retry Connection
+        </button>
+        <a href="/" class="block mt-4 text-xs text-slate-500 hover:text-white uppercase tracking-wider">Return
+            Home</a>
+    </div>
+</div>
 
-            // UI Elements
-            const progressFill = container.querySelector('#progress-fill');
-            const progressPercent = container.querySelector('#progress-percent');
-            const statusText = container.querySelector('#status-text');
-            const statusDetail = container.querySelector('#status-detail');
+<script>
+    (function () {
+        const container = document.getElementById('process-container');
+        const jobId = "{{ job_id }}";
 
-            const queueContainer = container.querySelector('#queue-container');
-            const queuePos = container.querySelector('#queue-pos');
-            const queueSize = container.querySelector('#queue-size');
+        console.log(`🔌 INIT Process View for Job: ${jobId}`);
 
-            const actions = container.querySelector('#actions');
-            const downloadBtn = container.querySelector('#download-btn');
+        // Update URL if needed
+        if (!window.location.pathname.includes(jobId) && !window.location.pathname.includes("process")) {
+            try {
+                window.history.pushState({}, '', `/process/${jobId}`);
+            } catch (e) { console.warn("History push failed", e); }
+        }
 
-            const stepProcessing = container.querySelector('#step-processing');
-            const stepComplete = container.querySelector('#step-complete');
+        // UI Elements
+        const progressFill = container.querySelector('#progress-fill');
+        const progressPercent = container.querySelector('#progress-percent');
+        const statusText = container.querySelector('#status-text');
+        const statusDetail = container.querySelector('#status-detail');
 
-            const errorContainer = container.querySelector('#error-container');
-            const sseUiContainer = container.querySelector('#sse-container');
-            const errorMsg = container.querySelector('#error-msg');
+        const queueContainer = container.querySelector('#queue-container');
+        const queuePos = container.querySelector('#queue-pos');
+        const queueSize = container.querySelector('#queue-size');
 
-            function handleProgress(e) {
-                const data = e.detail;
+        const actions = container.querySelector('#actions');
+        const downloadBtn = container.querySelector('#download-btn');
 
-                if (data.type === 'progress') {
-                    // Update main bar
-                    progressFill.style.width = `${data.progress}%`;
-                    progressPercent.textContent = `${data.progress}%`;
+        const stepProcessing = container.querySelector('#step-processing');
+        const stepComplete = container.querySelector('#step-complete');
 
-                    // Update text
-                    statusText.textContent = data.status || 'Processing...';
+        const errorContainer = container.querySelector('#error-container');
+        const sseUiContainer = container.querySelector('#sse-container');
+        const errorMsg = container.querySelector('#error-msg');
 
-                    // Update Detail (New!)
-                    if (data.detail) {
-                        statusDetail.textContent = data.detail;
-                        statusDetail.classList.remove('opacity-0');
-                    } else {
-                        statusDetail.textContent = '';
-                    }
+        function handleProgress(e) {
+            const data = e.detail;
 
-                    // Queue Logic
-                    if (data.position && data.position !== 'Processing' && data.position !== '-') {
-                        queueContainer.classList.remove('hidden');
-                        queuePos.textContent = data.position;
-                        queueSize.textContent = data.queue_size;
-                        // While in queue, status might be generic, detail might be empty
-                    } else {
-                        queueContainer.classList.add('hidden');
-                    }
+            if (data.type === 'progress') {
+                // Update main bar
+                progressFill.style.width = `${data.progress}%`;
+                progressPercent.textContent = `${data.progress}%`;
 
-                } else if (data.type === 'complete') {
-                    progressFill.style.width = '100%';
-                    progressPercent.textContent = '100%';
+                // Update text
+                statusText.textContent = data.status || 'Processing...';
 
-                    statusText.textContent = 'Done! 🎉';
-                    statusText.textContent = 'Done! 🎉';
-                    statusText.classList.remove('animate-pulse', 'bg-clip-text', 'text-transparent', 'bg-gradient-to-r', 'from-indigo-200', 'via-white', 'to-purple-200');
-                    statusText.classList.add('text-green-400');
-                    statusDetail.textContent = 'Your video is ready.';
+                // Update Detail (New!)
+                if (data.detail) {
+                    statusDetail.textContent = data.detail;
+                    statusDetail.classList.remove('opacity-0');
+                } else {
+                    statusDetail.textContent = '';
+                }
 
-                    stepProcessing.classList.remove('animate-pulse', 'text-indigo-300');
-                    stepProcessing.classList.add('text-slate-500');
-
-                    stepComplete.classList.add('text-green-400', 'font-bold', 'drop-shadow-[0_0_10px_rgba(74,222,128,0.5)]');
+                // Queue Logic
+                if (data.position && data.position !== 'Processing' && data.position !== '-') {
+                    queueContainer.classList.remove('hidden');
+                    queuePos.textContent = data.position;
+                    queueSize.textContent = data.queue_size;
+                    // While in queue, status might be generic, detail might be empty
+                } else {
                     queueContainer.classList.add('hidden');
+                }
 
-                    if (data.video_url) {
-                        const videoContainer = container.querySelector('#video-container');
-                        const videoPlayer = container.querySelector('#result-video');
+            } else if (data.type === 'complete') {
+                progressFill.style.width = '100%';
+                progressPercent.textContent = '100%';
 
-                        if (videoContainer && videoPlayer) {
-                            videoPlayer.src = data.video_url;
-                            videoContainer.classList.remove('hidden');
-                            videoPlayer.load(); // Ensure it loads
-                            // Try autoplay
-                            videoPlayer.play().catch(e => console.log("Autoplay prevented", e));
-                        }
+                statusText.textContent = 'Done! 🎉';
+                statusText.classList.remove('animate-pulse', 'bg-clip-text', 'text-transparent', 'bg-gradient-to-r', 'from-indigo-200', 'via-white', 'to-purple-200');
+                statusText.classList.add('text-green-400');
+                statusDetail.textContent = 'Your video is ready.';
 
-                        downloadBtn.href = data.video_url;
-                        actions.classList.remove('hidden');
-                        actions.classList.add('animate-[fadeIn_1s_ease-out]');
+                stepProcessing.classList.remove('animate-pulse', 'text-indigo-300');
+                stepProcessing.classList.add('text-slate-500');
+
+                stepComplete.classList.add('text-green-400', 'font-bold', 'drop-shadow-[0_0_10px_rgba(74,222,128,0.5)]');
+                queueContainer.classList.add('hidden');
+
+                if (data.video_url) {
+                    const videoContainer = container.querySelector('#video-result-container');
+                    const videoPlayer = container.querySelector('#result-video');
+
+                    if (videoContainer && videoPlayer) {
+                        videoPlayer.src = data.video_url;
+                        videoContainer.classList.remove('hidden');
+                        videoPlayer.load(); // Ensure it loads
+                        // Note: Autoplay disabled as per USER request
                     }
-                } else if (data.type === 'error') {
-                    showError(data.error_message);
+
+                    if (downloadBtn) {
+                        downloadBtn.href = data.video_url;
+                    }
                 }
+            } else if (data.type === 'error') {
+                showError(data.error_message);
             }
+        }
 
-            function showError(msg) {
-                sseUiContainer.classList.add('hidden');
-                errorContainer.classList.remove('hidden');
-                errorMsg.textContent = msg;
+        function showError(msg) {
+            sseUiContainer.classList.add('hidden');
+            errorContainer.classList.remove('hidden');
+            errorMsg.textContent = msg;
+        }
+
+        // Listen for global events dispatched by index.html
+        document.addEventListener('job-progress', handleProgress);
+
+        // Cleanup listener check
+        const originalHandle = handleProgress;
+        const safeHandle = (e) => {
+            if (!document.body.contains(container)) {
+                document.removeEventListener('job-progress', safeHandle);
+                return;
             }
+            originalHandle(e);
+        }
+        document.removeEventListener('job-progress', handleProgress);
+        document.addEventListener('job-progress', safeHandle);
 
-            // Listen for global events dispatched by index.html
-            document.addEventListener('job-progress', handleProgress);
-
-            // Cleanup listener check
-            const originalHandle = handleProgress;
-            const safeHandle = (e) => {
-                if (!document.body.contains(container)) {
-                    document.removeEventListener('job-progress', safeHandle);
-                    return;
-                }
-                originalHandle(e);
-            }
-            document.removeEventListener('job-progress', handleProgress);
-            document.addEventListener('job-progress', safeHandle);
-
-        })();
-    </script>
+    })();
+</script>
 </div>

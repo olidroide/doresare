@@ -101,35 +101,22 @@
      * Handle success event
      */
     function handleSuccess(data) {
-        const resultado = document.getElementById('resultado');
-        if (resultado) {
-            resultado.innerHTML = `
-                <div class="glass-panel p-6 rounded-2xl border-green-500/30 animate-fade-in shadow-lg shadow-green-900/20">
-                    <h3 class="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-500 mb-6 text-center">✨ Video Completed!</h3>
-                    
-                    <div class="relative rounded-xl overflow-hidden shadow-2xl border border-gray-800 bg-black aspect-video mb-6">
-                        <video controls class="w-full h-full object-contain">
-                            <source src="/static/${data.output_filename}" type="video/mp4">
-                            Your browser does not support HTML5 video.
-                        </video>
-                    </div>
+        const videoContainer = document.getElementById('video-result-container');
+        const videoPlayer = document.getElementById('result-video');
+        const downloadBtn = document.getElementById('download-btn');
 
-                    <div class="flex flex-col gap-3">
-                        <a href="/static/${data.output_filename}" download="${data.output_filename}"
-                            class="block w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-bold py-4 px-6 rounded-xl transition-all shadow-lg hover:shadow-green-500/25 text-center transform active:scale-95 flex items-center justify-center gap-2">
-                            <span>⬇️ Download Video</span>
-                        </a>
-                        
-                        <button onclick="resetToUploadState()" 
-                            class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-4 px-6 rounded-xl transition-all shadow-lg hover:shadow-indigo-500/25 transform active:scale-95 flex items-center justify-center gap-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
-                            </svg>
-                            <span>Upload New Video</span>
-                        </button>
-                    </div>
-                </div>
-            `;
+        console.log('✅ Job completed. Updating result UI...');
+
+        if (videoPlayer) {
+            const videoUrl = data.video_url || (data.output_filename ? `/static/${data.output_filename}` : '');
+            if (videoUrl) {
+                videoPlayer.src = videoUrl;
+                if (videoContainer) videoContainer.classList.remove('hidden');
+                videoPlayer.load();
+                if (downloadBtn) {
+                    downloadBtn.href = videoUrl;
+                }
+            }
         }
     }
 
