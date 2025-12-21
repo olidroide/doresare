@@ -47,7 +47,9 @@
                 <div class="glass-panel rounded-3xl p-6 sm:p-8 shadow-2xl shadow-black/50">
                     <div id="upload-form-container">
                         <form hx-post="/process" hx-encoding="multipart/form-data" hx-target="#main-container"
-                            hx-swap="innerHTML" hx-indicator="#loading" class="space-y-6">
+                            hx-swap="innerHTML" hx-indicator="#loading"
+                            hx-on::before-request="document.getElementById('upload-form-container').classList.add('opacity-0', 'pointer-events-none');"
+                            class="space-y-6 transition-opacity duration-300">
                             <!-- HTMX indicator target (hidden by default) -->
                             <div id="loading" class="hidden" aria-hidden="true">Loading...</div>
 

@@ -128,55 +128,26 @@ async def home(request: Request):
         "filename": jobs[active_job_id]["filename"] if active_job_id else None
     })
 
-@app.post("/process")
-async def process(request: Request, background_tasks: BackgroundTasks, video_url: str = Form(None), file: UploadFile = File(None)):
-    """
-    Submit a video for processing.
-    User is limited to 1 active job.
-    """
-    user_id = request.state.user_id
-    
-    # 1. Enforce Single Active Job
-    if user_id in user_active_job:
-        existing_job_id = user_active_job[user_id]
-        if existing_job_id in jobs and jobs[existing_job_id]["status"] in ["queued", "running"]:
-             # Return error partial
-             return templates.TemplateResponse("partials/error.html", {
-                "request": request,
-                "error_message": "You already have a job in progress. Please wait for it to finish."
-            })
-        else:
-            # Stale, remove
-            del user_active_job[user_id]
+# --- Background Tasks ---
 
-    temp_path = None
+async def background_process_video(job_id: str, user_id: str, video_url: Optional[str] = None, file_path: Optional[str] = None):
+    """
+    Handles the heavy lifting of downloading and/or uploading to the backend.
+    Updates the global `jobs` dict to reflect progress.
+    """
+    temp_path = file_path
+    filename = "video"
+    if file_path:
+        filename = os.path.basename(file_path)
+    elif video_url:
+        filename = video_url
+
     try:
         input_val = None
-        filename = "video"
         
-        # Handle Input
-        if file:
-            import tempfile
-            filename = file.filename
-            with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file.filename}") as temp_file:
-                shutil.copyfileobj(file.file, temp_file)
-                temp_path = temp_file.name
-            input_val = handle_file(temp_path)
-            print(f"🚀 Saved temp file to {temp_path}")
-        elif video_url:
-            # Create a job entry to report download progress via SSE
-            job_id = str(uuid.uuid4())
-            jobs[job_id] = {
-                "job": None,
-                "filename": video_url,
-                "start_time": time.time(),
-                "temp_file": None,
-                "status": "downloading",
-                "progress": 0,
-                "user_id": user_id,
-            }
-            user_active_job[user_id] = job_id
-
+        # 1. Handle YouTube/URL Download if needed
+        if video_url:
+            print(f"📥 [Background] Starting download for {video_url}...")
             try:
                 # Stream download updates
                 async for status in download_video_stream(video_url, max_height=720):
@@ -197,99 +168,134 @@ async def process(request: Request, background_tasks: BackgroundTasks, video_url
                     elif hasattr(status, "exists"):  # It's a Path object
                         temp_path = str(status)
                         filename = os.path.basename(temp_path)
+                        jobs[job_id]["temp_file"] = temp_path
+                        jobs[job_id]["filename"] = filename
 
-                        # Prepare file for upload to backend
-                        input_val = handle_file(temp_path)
-                        client = get_client()
-                        print(f"🚀 Uploading downloaded file {temp_path} to backend...")
+                if not temp_path:
+                    raise DownloadError("Download failed to produce a file.")
 
-                        job = client.submit(input_val, "", fn_index=0)
-
-                        jobs[job_id].update(
-                            {
-                                "job": job,
-                                "filename": filename,
-                                "start_time": time.time(),
-                                "temp_file": temp_path,
-                                "status": "queued",
-                            }
-                        )
-
-                        # We uploaded the file; delete local copy to save space
-                        try:
-                            if os.path.exists(temp_path):
-                                os.remove(temp_path)
-                        except Exception:
-                            pass
-
-                        # Return Partial immediately after submitting to backend
-                        template_name = "process.html"
-                        if request.headers.get("HX-Request"):
-                            template_name = "partials/process_content.html"
-
-                        return templates.TemplateResponse(
-                            template_name,
-                            {
-                                "request": request,
-                                "job_id": job_id,
-                                "filename": filename,
-                            },
-                        )
-
-                # If we exit loop without returning, fail
-                raise HTTPException(status_code=500, detail="Download did not complete")
-
-            except RequiresFFmpegError as e:
-                hint = (
-                    "This video requires ffmpeg to merge separate streams. "
-                    "Rebuild the frontend Docker image with build-arg INSTALL_JELLYFIN_FFMPEG=true."
-                )
+            except Exception as e:
+                print(f"❌ [Background] Download failed: {e}")
                 jobs[job_id]["status"] = "error"
-                return templates.TemplateResponse(
-                    "partials/error.html",
-                    {
-                        "request": request,
-                        "error_message": f"Download failed: {e}. {hint}",
-                    },
-                )
+                jobs[job_id]["error_message"] = f"Download failed: {str(e)}"
+                return
 
-            except DownloadError as e:
-                jobs[job_id]["status"] = "error"
-                return templates.TemplateResponse(
-                    "partials/error.html",
-                    {"request": request, "error_message": f"Download failed: {e}"},
-                )
+        # 2. Upload to Backend
+        if not temp_path or not os.path.exists(temp_path):
+             jobs[job_id]["status"] = "error"
+             jobs[job_id]["error_message"] = "Local file missing for processing."
+             return
 
-        if not input_val:
+        print(f"🚀 [Background] Submitting {filename} to backend...")
+        jobs[job_id]["status"] = "queued"
+        jobs[job_id]["progress"] = 0
+        jobs[job_id]["detail"] = "Uploading to analytical engine..."
+
+        try:
+             # Prepare file for upload to backend
+             input_val = handle_file(temp_path)
+             client = get_client()
+             
+             # Submit (file upload). The backend expects two inputs: (file_input, url_input)
+             job = client.submit(input_val, "", fn_index=0)
+             
+             # Update job entry with the live Gradio job
+             jobs[job_id].update({
+                 "job": job,
+                 "status": "queued",
+                 "detail": "Connected to backend"
+             })
+             
+             print(f"✅ [Background] Job {job_id} successfully submitted to backend.")
+
+        except Exception as e:
+             print(f"❌ [Background] Client submit failed: {e}")
+             jobs[job_id]["status"] = "error"
+             jobs[job_id]["error_message"] = f"Failed to connect to backend: {str(e)}"
+             return
+
+    except Exception as e:
+        print(f"❌ [Background] Critical Error: {e}")
+        import traceback
+        traceback.print_exc()
+        jobs[job_id]["status"] = "error"
+        jobs[job_id]["error_message"] = str(e)
+
+    finally:
+        # We don't delete temp_path here yet because the Gradio client might still be using it 
+        # (if it handles the upload asynchronously/later, though submit() usually does it).
+        # Actually, handle_file returns a path that Gradio knows how to upload.
+        # The best place to cleanup is after the backend job is done (already handled in SSE stream).
+        pass
+
+
+@app.post("/process")
+async def process(request: Request, background_tasks: BackgroundTasks, video_url: str = Form(None), file: UploadFile = File(None)):
+    """
+    Submit a video for processing.
+    User is limited to 1 active job.
+    Returns the UI partial IMMEDIATELY while processing continues in background.
+    """
+    user_id = request.state.user_id
+    
+    # 1. Enforce Single Active Job
+    if user_id in user_active_job:
+        existing_job_id = user_active_job[user_id]
+        if existing_job_id in jobs and jobs[existing_job_id]["status"] in ["downloading", "queued", "running"]:
+             return templates.TemplateResponse("partials/error.html", {
+                "request": request,
+                "error_message": "You already have a job in progress. Please wait for it to finish."
+            })
+        else:
+            # Stale/Done, remove from active track
+            if user_id in user_active_job:
+                del user_active_job[user_id]
+
+    job_id = str(uuid.uuid4())
+    temp_path = None
+    filename = "video"
+
+    try:
+        # 2. Setup Job Entry
+        jobs[job_id] = {
+            "job": None,
+            "filename": "",
+            "start_time": time.time(),
+            "temp_file": None,
+            "status": "downloading" if video_url else "queued",
+            "progress": 0,
+            "detail": "Initializing..." if video_url else "Saving upload...",
+            "user_id": user_id,
+        }
+        user_active_job[user_id] = job_id
+
+        # 3. Handle File Upload (Sync Part)
+        # We save the file immediately so the UploadFile object isn't closed when the request returns
+        if file and file.filename:
+            filename = file.filename
+            jobs[job_id]["filename"] = filename
+            
+            import tempfile
+            with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file.filename}") as temp_file:
+                shutil.copyfileobj(file.file, temp_file)
+                temp_path = temp_file.name
+            
+            jobs[job_id]["temp_file"] = temp_path
+            print(f"🚀 [Sync] Saved temp upload to {temp_path}")
+            
+            # Start background upload logic
+            background_tasks.add_task(background_process_video, job_id, user_id, file_path=temp_path)
+            
+        elif video_url:
+            filename = video_url
+            jobs[job_id]["filename"] = "YouTube Video"
+            # Start background download/upload logic
+            background_tasks.add_task(background_process_video, job_id, user_id, video_url=video_url)
+        
+        else:
              raise HTTPException(status_code=400, detail="No file uploaded or URL provided")
 
-        # Connect and Submit
-        client = get_client()
-        print(f"🚀 Submitting job for {filename}...")
-        
-        # Submit (file upload). The backend expects two inputs: (file_input, url_input)
-        # Provide the file value first and an empty string for the URL input.
-        try:
-             job = client.submit(input_val, "", fn_index=0)
-        except Exception as client_err:
-             print(f"❌ Client submit failed: {client_err}")
-             # If submission fails, we must catch it here to avoid hanging
-             raise client_err
-        
-        job_id = str(uuid.uuid4())
-        jobs[job_id] = {
-            "job": job,
-            "filename": filename,
-            "start_time": time.time(),
-            "temp_file": temp_path,
-            "status": "queued",
-            "user_id": user_id
-        }
-        
-        # Track active job
-        user_active_job[user_id] = job_id
-        
-        # Return HTMX Partial
+        # 4. Return UI Partial IMMEDIATELY
         template_name = "process.html"
         if request.headers.get("HX-Request"):
             template_name = "partials/process_content.html"
@@ -302,28 +308,13 @@ async def process(request: Request, background_tasks: BackgroundTasks, video_url
 
     except Exception as e:
         print(f"❌ Error in process endpoint: {e}")
-        import traceback
-        traceback.print_exc()
+        # Cleanup
+        if job_id in jobs: del jobs[job_id]
+        if user_id in user_active_job: del user_active_job[user_id]
         
-        # Ensure we clean up the job entry so it doesn't hang in "downloading"
-        if 'job_id' in locals() and job_id in jobs:
-             jobs[job_id]["status"] = "error"
-             jobs[job_id]["error_message"] = str(e)
-             
-        if 'user_id' in locals() and user_id in user_active_job:
-            # Only remove if it matches our current job to avoid race conditions
-            if user_active_job[user_id] == locals().get('job_id'):
-                del user_active_job[user_id]
-
-        if temp_path and os.path.exists(temp_path):
-             try:
-                os.remove(temp_path)
-             except:
-                pass
-                
         return templates.TemplateResponse("partials/error.html", {
             "request": request,
-            "error_message": f"Processing failed: {str(e)}"
+            "error_message": f"Failed to start processing: {str(e)}"
         })
 
 # --- Unified SSE Endpoint ---
