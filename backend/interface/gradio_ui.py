@@ -97,7 +97,7 @@ def create_app(font_manager: FontManager):
             outputs=output_video
         )
     
-    app.queue()
+    app.queue(default_concurrency_limit=1)
     return app
     
 

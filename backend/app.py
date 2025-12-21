@@ -42,9 +42,9 @@ try:
     print(f"🔎 Deployment environment: '{deploy_env}'")
 
     if deploy_env == 'HF':
-        # Hugging Face: prefer lightweight model, don't preload heavy global models
-        print("ℹ️ HF preset: prefer lightweight separator model and skip global preload.")
-        os.environ.setdefault('AUDIO_SEPARATOR_MODEL', 'UVR_MDXNET_KARA_2.onnx')
+        # Hugging Face: prefer high-quality model (Inst_Main), 16GB RAM is enough.
+        print("ℹ️ HF preset: prefer high-quality Inst_Main model for rock/acoustic chords.")
+        os.environ.setdefault('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_Main.onnx')
         os.environ.setdefault('SKIP_AUDIO_SEPARATION', 'false')
         # On HF we usually don't want to preload if resources are tight
         

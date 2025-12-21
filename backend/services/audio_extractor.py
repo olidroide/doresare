@@ -270,10 +270,12 @@ def load_global_model():
         model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR_MDXNET_KARA_2.onnx')
         
         # J3455 SAFETY OVERRIDE:
-        # Force switch to Kara_2 for speed if heavy models are detected.
-        if 'HQ' in model_name or 'Main' in model_name or 'Kim_Vocal' in model_name or 'Inst_1' in model_name:
+        # Force switch to Kara_2 for speed if heavy models are detected on low-end hardware.
+        # But allow them on Hugging Face (16GB RAM).
+        deploy_env = os.getenv('ENV', 'LOCAL').upper()
+        if deploy_env != 'HF' and ('HQ' in model_name or 'Main' in model_name or 'Kim_Vocal' in model_name or 'Inst_1' in model_name):
             print(f"⚠️ DETECTED HEAVY/SLOW MODEL CONFIGURATION: {model_name}")
-            print("🚀 FORCING 'UVR_MDXNET_KARA_2.onnx' override for MAX SPEED!")
+            print("🚀 FORCING 'UVR_MDXNET_KARA_2.onnx' override for MAX SPEED on local/server device!")
             model_name = 'UVR_MDXNET_KARA_2.onnx'
             
         if not model_name.endswith('.onnx'):
@@ -423,9 +425,11 @@ def separate_audio_ai(
                 model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR_MDXNET_KARA_2.onnx')
                 
                 # J3455 SAFETY OVERRIDE (Per-request instance)
-                if 'HQ' in model_name or 'Main' in model_name or 'Kim_Vocal' in model_name or 'Inst_1' in model_name:
+                # But allow them on Hugging Face (16GB RAM).
+                deploy_env = os.getenv('ENV', 'LOCAL').upper()
+                if deploy_env != 'HF' and ('HQ' in model_name or 'Main' in model_name or 'Kim_Vocal' in model_name or 'Inst_1' in model_name):
                     print(f"⚠️ DETECTED HEAVY MODEL CONFIGURATION (Per-request): {model_name}")
-                    print("🚀 FORCING 'UVR_MDXNET_KARA_2.onnx' override!")
+                    print("🚀 FORCING 'UVR_MDXNET_KARA_2.onnx' override for local/server device!")
                     model_name = 'UVR_MDXNET_KARA_2.onnx'
                     
                 if not model_name.endswith('.onnx'):

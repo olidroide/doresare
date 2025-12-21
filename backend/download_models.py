@@ -25,14 +25,23 @@ try:
     
     separator = Separator(log_level=logging.INFO, model_file_dir=model_dir)
     
-    # Load the specific model used in the pipeline
-    # Using UVR_MDXNET_KARA_2.onnx model for MAXIMUM speed on low-power device
-    # Can be overridden with AUDIO_SEPARATOR_MODEL environment variable
-    model_name = os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR_MDXNET_KARA_2.onnx')
-    print(f"⬇️ Downloading model: {model_name}")
-    separator.load_model(model_filename=model_name)
+    # Define models to pre-cache
+    # 1. KARA_2 (Lightweight, for low-end devices)
+    # 2. Inst_Main (High-quality, for rock/acoustic on HF)
+    models_to_download = [
+        os.getenv('AUDIO_SEPARATOR_MODEL', 'UVR_MDXNET_KARA_2.onnx'),
+        'UVR-MDX-NET-Inst_Main.onnx'
+    ]
+
+    for model_name in models_to_download:
+        if not model_name.endswith('.onnx'):
+            model_name += '.onnx'
+            
+        print(f"⬇️ Downloading model: {model_name}")
+        separator.load_model(model_filename=model_name)
+        print(f"✅ Model {model_name} cached successfully!")
     
-    print(f"✅ Model {model_name} downloaded and cached successfully!")
+    print("✅ All AI models downloaded and cached successfully!")
     
 except Exception as e:
     print(f"❌ Error downloading models: {e}")
