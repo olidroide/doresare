@@ -48,6 +48,14 @@ jobs: Dict[str, dict] = {}
 # user_active_job: user_id -> job_id (Only one active job per user)
 user_active_job: Dict[str, str] = {}
 
+# Global Heartbeat Cache to avoid overloading Gradio with status calls
+# Format: { "time": float, "progress": int|None, "status": str }
+global_heartbeat_cache = {
+    "time": 0,
+    "progress": None,
+    "status": "Waiting..."
+}
+
 
 
 
@@ -482,11 +490,60 @@ async def events(request: Request):
                                 desc = desc.strip().rstrip(':').strip()
 
                         # Calculate queue pos and ETA
+                        queue_pos_int = None
                         queue_pos = "-"
                         eta_formatted = ""
                         
+                        if "QUEUE" in str(status.code) and status.rank is not None:
+                             queue_pos_int = status.rank + 1
+                             queue_pos = str(queue_pos_int)
+                        
                         # rank_eta is an estimate in seconds (safely accessed)
                         rank_eta = getattr(status, "rank_eta", None)
+                        
+                        # Heartbeat Logic: Optimize by using a global cache (refreshed every 1s)
+                        global_progress = None
+                        active_job_status = "Waiting..."
+                        
+                        now = time.time()
+                        if now - global_heartbeat_cache["time"] > 1.0:
+                            # Refresh cache
+                            found_active = False
+                            for other_job_id, other_data in list(jobs.items()):
+                                if other_data.get("status") == "running" and other_data.get("job"):
+                                    try:
+                                        other_status = other_data["job"].status()
+                                        if other_status.progress_data:
+                                            p_unit = other_status.progress_data[-1]
+                                            if p_unit.progress is not None:
+                                                global_heartbeat_cache["progress"] = int(p_unit.progress * 100)
+                                                s_text = p_unit.desc or "Processing..."
+                                                global_heartbeat_cache["status"] = re.sub(r'\s*\d+%', '', s_text).strip().rstrip(':').strip()
+                                                global_heartbeat_cache["time"] = now
+                                                found_active = True
+                                                break
+                                    except Exception:
+                                        pass # Avoid crashing on Gradio errors
+                            
+                            if not found_active:
+                                global_heartbeat_cache["progress"] = None
+                                global_heartbeat_cache["status"] = "No active jobs."
+                                global_heartbeat_cache["time"] = now
+
+                        global_progress = global_heartbeat_cache["progress"]
+                        active_job_status = global_heartbeat_cache["status"]
+
+
+                        # Fallback ETA Calculation if rank_eta is missing
+                        if rank_eta is None and queue_pos_int is not None:
+                            # Assume average processing time of 10 minutes (600s) on HF CPU
+                            avg_time = 600 
+                            current_job_rem = avg_time * (1 - (global_progress or 0) / 100)
+                            # ETA = (Remaining time of current job) + (People ahead of me excluding current * average)
+                            # If rank=0 (pos=1), I wait for current job.
+                            # If rank=1 (pos=2), I wait for current job + 1 full job.
+                            rank_eta = current_job_rem + (queue_pos_int - 1) * avg_time
+
                         if rank_eta is not None:
                             eta_seconds = int(rank_eta)
                             if eta_seconds > 0:
@@ -494,27 +551,6 @@ async def events(request: Request):
                                     eta_formatted = f"{eta_seconds // 60}m {eta_seconds % 60}s"
                                 else:
                                     eta_formatted = f"{eta_seconds}s"
-                        
-                        if "QUEUE" in str(status.code) and status.rank is not None:
-                             queue_pos = str(status.rank + 1)
-                        
-                        # Heartbeat Logic: Find if ANY job is currently 'Processing'
-                        # This allows queued users to see that the queue is actually moving.
-                        global_progress = None
-                        active_job_status = "Waiting..."
-                        
-                        for other_job_id, other_data in list(jobs.items()):
-                            if other_data.get("status") == "running" and other_data.get("job"):
-                                # This is the active job at the front of the queue
-                                other_status = other_data["job"].status()
-                                if other_status.progress_data:
-                                    p_unit = other_status.progress_data[-1]
-                                    if p_unit.progress is not None:
-                                        global_progress = int(p_unit.progress * 100)
-                                        active_job_status = p_unit.desc or "Processing..."
-                                        # Clean active_job_status
-                                        active_job_status = re.sub(r'\s*\d+%', '', active_job_status).strip().rstrip(':').strip()
-                                break
 
                         data = {
                             "type": "progress",
