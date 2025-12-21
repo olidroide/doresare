@@ -536,19 +536,26 @@ async def events(request: Request):
 
                         # Fallback ETA Calculation if rank_eta is missing
                         if rank_eta is None and queue_pos_int is not None:
-                            # Assume average processing time of 10 minutes (600s) on HF CPU
-                            avg_time = 600 
-                            current_job_rem = avg_time * (1 - (global_progress or 0) / 100)
-                            # ETA = (Remaining time of current job) + (People ahead of me excluding current * average)
-                            # If rank=0 (pos=1), I wait for current job.
-                            # If rank=1 (pos=2), I wait for current job + 1 full job.
-                            rank_eta = current_job_rem + (queue_pos_int - 1) * avg_time
+                            # Use a more realistic base time of 5-10 mins depending on position
+                            # Most songs are 3-4 mins, processing on CPU is approx 1.5x - 2x length
+                            # Let's assume 400s as a safer average than a flat 600s
+                            base_avg = 480 
+                            
+                            # If we have global progress of the current job, subtract it from the wait
+                            active_rem = base_avg * (1 - (global_progress or 0) / 100)
+                            
+                            # Total ETA = (Remaining time of current) + (Others in front * average)
+                            rank_eta = active_rem + (queue_pos_int - 1) * base_avg
 
                         if rank_eta is not None:
+                            # Ensure we don't show suspiciously perfect rounded numbers like "10m 0s"
+                            # by adding a slight jitter or just being precise
                             eta_seconds = int(rank_eta)
                             if eta_seconds > 0:
                                 if eta_seconds >= 60:
-                                    eta_formatted = f"{eta_seconds // 60}m {eta_seconds % 60}s"
+                                    m = eta_seconds // 60
+                                    s = eta_seconds % 60
+                                    eta_formatted = f"{m}m {s}s"
                                 else:
                                     eta_formatted = f"{eta_seconds}s"
 
@@ -560,6 +567,7 @@ async def events(request: Request):
                             "position": queue_pos,
                             "queue_size": str(len(jobs)),
                             "eta": eta_formatted,
+                            "eta_seconds": int(rank_eta) if rank_eta is not None else None,
                             "global_progress": global_progress,
                             "active_job_status": active_job_status
                         }

@@ -82,11 +82,16 @@
 
                     <!-- Estimated Time (ETA) -->
                     <div id="eta-container"
-                        class="hidden bg-slate-800/80 rounded-xl px-5 py-3 border border-purple-500/30 shadow-[0_0_15px_rgba(168,85,247,0.15)] min-w-[140px]">
+                        class="hidden bg-slate-800/80 rounded-xl px-5 py-3 border border-purple-500/30 shadow-[0_0_15px_rgba(168,85,247,0.15)] min-w-[140px] flex flex-col justify-center">
                         <div class="text-[10px] text-purple-300 uppercase tracking-widest mb-1 text-center">Estimated
                             Wait</div>
                         <div class="font-mono text-xl font-bold text-white leading-none text-center">
                             <span id="queue-eta">-</span>
+                        </div>
+                        <!-- Wait Bar (Depletes as time goes by) -->
+                        <div class="mt-2 w-full h-1 bg-slate-900/50 rounded-full overflow-hidden">
+                            <div id="wait-bar-fill" class="h-full bg-purple-500/50 transition-all duration-1000"
+                                style="width: 100%"></div>
                         </div>
                     </div>
                 </div>
@@ -177,10 +182,44 @@
 
         const etaContainer = container.querySelector('#eta-container');
         const queueEta = container.querySelector('#queue-eta');
+        const waitBarFill = container.querySelector('#wait-bar-fill');
         const globalProgressContainer = container.querySelector('#global-progress-container');
         const globalProgressFill = container.querySelector('#global-progress-fill');
         const globalProgressText = container.querySelector('#global-progress-text');
         const globalStatusText = container.querySelector('#global-status-text');
+
+        let lastEtaSeconds = 0;
+        let countdownInterval = null;
+
+        function updateEtaDisplay(seconds) {
+            if (seconds <= 0) {
+                queueEta.textContent = "Very soon...";
+                waitBarFill.style.width = "0%";
+                return;
+            }
+            const m = Math.floor(seconds / 60);
+            const s = seconds % 60;
+            queueEta.textContent = `${m}m ${s}s`;
+
+            // Wait Bar logic: We assume max wait is around 15 mins (900s) for the visual bar
+            const percent = Math.min(100, (seconds / 900) * 100);
+            waitBarFill.style.width = `${percent}%`;
+        }
+
+        function startCountdown(seconds) {
+            clearInterval(countdownInterval);
+            lastEtaSeconds = seconds;
+            updateEtaDisplay(lastEtaSeconds);
+
+            countdownInterval = setInterval(() => {
+                if (lastEtaSeconds > 0) {
+                    lastEtaSeconds--;
+                    updateEtaDisplay(lastEtaSeconds);
+                } else {
+                    clearInterval(countdownInterval);
+                }
+            }, 1000);
+        }
 
         function handleProgress(e) {
             const data = e.detail;
@@ -207,12 +246,17 @@
                     queuePos.textContent = data.position;
                     queueSize.textContent = data.queue_size;
 
-                    // ETA update
-                    if (data.eta) {
+                    // ETA update with local countdown
+                    if (data.eta_seconds !== null && data.eta_seconds !== undefined) {
                         etaContainer.classList.remove('hidden');
-                        queueEta.textContent = data.eta;
+                        // Only restart countdown if the difference is significant (> 10s) 
+                        // to avoid jitter, or if it's the first time
+                        if (Math.abs(lastEtaSeconds - data.eta_seconds) > 10 || lastEtaSeconds === 0) {
+                            startCountdown(data.eta_seconds);
+                        }
                     } else {
                         etaContainer.classList.add('hidden');
+                        clearInterval(countdownInterval);
                     }
 
                     // Global Heartbeat update
@@ -226,7 +270,9 @@
                     }
                 } else {
                     queueContainer.classList.add('hidden');
+                    clearInterval(countdownInterval);
                 }
+
 
             } else if (data.type === 'complete') {
                 progressFill.style.width = '100%';
