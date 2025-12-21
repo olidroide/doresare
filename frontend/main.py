@@ -481,11 +481,39 @@ async def events(request: Request):
                                 desc = re.sub(r'\s*\(\)', '', desc) # Remove empty "()"
                                 desc = desc.strip().rstrip(':').strip()
 
-                        # Calculate queue pos
-                        # ... (Queue logic simplified for brevity, same as before)
+                        # Calculate queue pos and ETA
                         queue_pos = "-"
+                        eta_formatted = ""
+                        
+                        # rank_eta is an estimate in seconds
+                        if status.rank_eta is not None:
+                            eta_seconds = int(status.rank_eta)
+                            if eta_seconds > 0:
+                                if eta_seconds >= 60:
+                                    eta_formatted = f"{eta_seconds // 60}m {eta_seconds % 60}s"
+                                else:
+                                    eta_formatted = f"{eta_seconds}s"
+                        
                         if "QUEUE" in str(status.code) and status.rank is not None:
                              queue_pos = str(status.rank + 1)
+                        
+                        # Heartbeat Logic: Find if ANY job is currently 'Processing'
+                        # This allows queued users to see that the queue is actually moving.
+                        global_progress = None
+                        active_job_status = "Waiting..."
+                        
+                        for other_job_id, other_data in list(jobs.items()):
+                            if other_data.get("status") == "running" and other_data.get("job"):
+                                # This is the active job at the front of the queue
+                                other_status = other_data["job"].status()
+                                if other_status.progress_data:
+                                    p_unit = other_status.progress_data[-1]
+                                    if p_unit.progress is not None:
+                                        global_progress = int(p_unit.progress * 100)
+                                        active_job_status = p_unit.desc or "Processing..."
+                                        # Clean active_job_status
+                                        active_job_status = re.sub(r'\s*\d+%', '', active_job_status).strip().rstrip(':').strip()
+                                break
 
                         data = {
                             "type": "progress",
@@ -493,7 +521,10 @@ async def events(request: Request):
                             "status": desc,
                             "detail": detail,
                             "position": queue_pos,
-                            "queue_size": str(len(jobs))
+                            "queue_size": str(len(jobs)),
+                            "eta": eta_formatted,
+                            "global_progress": global_progress,
+                            "active_job_status": active_job_status
                         }
                         yield f"event: job_progress\ndata: {json.dumps(data)}\n\n"
                 

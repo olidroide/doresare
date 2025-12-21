@@ -63,18 +63,47 @@
             </div>
 
             <!-- Queue Info (Hidden by default) -->
-            <div id="queue-container" class="hidden text-center transform transition-all">
-                <div
-                    class="inline-block bg-slate-800/80 rounded-lg px-6 py-3 border border-indigo-500/30 shadow-[0_0_15px_rgba(99,102,241,0.15)]">
-                    <div class="text-[10px] text-indigo-300 uppercase tracking-widest mb-1">Queue Position</div>
-                    <div class="font-mono text-2xl font-bold text-white leading-none flex items-center gap-2">
-                        <span class="relative flex h-3 w-3">
-                            <span
-                                class="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-                            <span class="relative inline-flex rounded-full h-3 w-3 bg-indigo-500"></span>
-                        </span>
-                        <span><span id="queue-pos">-</span> / <span id="queue-size">-</span></span>
+            <div id="queue-container" class="hidden text-center transform transition-all space-y-4">
+                <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+                    <!-- Queue Position -->
+                    <div
+                        class="bg-slate-800/80 rounded-xl px-5 py-3 border border-indigo-500/30 shadow-[0_0_15px_rgba(99,102,241,0.15)] min-w-[140px]">
+                        <div class="text-[10px] text-indigo-300 uppercase tracking-widest mb-1">Queue Position</div>
+                        <div
+                            class="font-mono text-xl font-bold text-white leading-none flex items-center justify-center gap-2">
+                            <span class="relative flex h-2 w-2">
+                                <span
+                                    class="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+                            </span>
+                            <span><span id="queue-pos">-</span> / <span id="queue-size">-</span></span>
+                        </div>
                     </div>
+
+                    <!-- Estimated Time (ETA) -->
+                    <div id="eta-container"
+                        class="hidden bg-slate-800/80 rounded-xl px-5 py-3 border border-purple-500/30 shadow-[0_0_15px_rgba(168,85,247,0.15)] min-w-[140px]">
+                        <div class="text-[10px] text-purple-300 uppercase tracking-widest mb-1 text-center">Estimated
+                            Wait</div>
+                        <div class="font-mono text-xl font-bold text-white leading-none text-center">
+                            <span id="queue-eta">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Global Progress (What the active job is doing) -->
+                <div id="global-progress-container"
+                    class="hidden px-4 py-2 bg-indigo-500/5 rounded-lg border border-white/5 animate-pulse">
+                    <p class="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Active Job Progress</p>
+                    <div class="flex items-center gap-3">
+                        <div class="flex-1 h-1 bg-slate-800 rounded-full overflow-hidden">
+                            <div id="global-progress-fill" class="h-full bg-indigo-500 transition-all duration-1000"
+                                style="width: 0%"></div>
+                        </div>
+                        <span id="global-progress-text" class="text-[10px] font-mono text-indigo-400">0%</span>
+                    </div>
+                    <p id="global-status-text" class="text-[10px] text-slate-400 mt-1 italic italic-none">Waiting for
+                        resources...</p>
                 </div>
             </div>
 
@@ -146,6 +175,13 @@
         const sseUiContainer = container.querySelector('#sse-container');
         const errorMsg = container.querySelector('#error-msg');
 
+        const etaContainer = container.querySelector('#eta-container');
+        const queueEta = container.querySelector('#queue-eta');
+        const globalProgressContainer = container.querySelector('#global-progress-container');
+        const globalProgressFill = container.querySelector('#global-progress-fill');
+        const globalProgressText = container.querySelector('#global-progress-text');
+        const globalStatusText = container.querySelector('#global-status-text');
+
         function handleProgress(e) {
             const data = e.detail;
 
@@ -165,12 +201,29 @@
                     statusDetail.textContent = '';
                 }
 
-                // Queue Logic
+                // Queue logic
                 if (data.position && data.position !== 'Processing' && data.position !== '-') {
                     queueContainer.classList.remove('hidden');
                     queuePos.textContent = data.position;
                     queueSize.textContent = data.queue_size;
-                    // While in queue, status might be generic, detail might be empty
+
+                    // ETA update
+                    if (data.eta) {
+                        etaContainer.classList.remove('hidden');
+                        queueEta.textContent = data.eta;
+                    } else {
+                        etaContainer.classList.add('hidden');
+                    }
+
+                    // Global Heartbeat update
+                    if (data.global_progress !== null) {
+                        globalProgressContainer.classList.remove('hidden');
+                        globalProgressFill.style.width = `${data.global_progress}%`;
+                        globalProgressText.textContent = `${data.global_progress}%`;
+                        globalStatusText.textContent = data.active_job_status || "Processing...";
+                    } else {
+                        globalProgressContainer.classList.add('hidden');
+                    }
                 } else {
                     queueContainer.classList.add('hidden');
                 }
