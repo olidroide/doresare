@@ -485,9 +485,10 @@ async def events(request: Request):
                         queue_pos = "-"
                         eta_formatted = ""
                         
-                        # rank_eta is an estimate in seconds
-                        if status.rank_eta is not None:
-                            eta_seconds = int(status.rank_eta)
+                        # rank_eta is an estimate in seconds (safely accessed)
+                        rank_eta = getattr(status, "rank_eta", None)
+                        if rank_eta is not None:
+                            eta_seconds = int(rank_eta)
                             if eta_seconds > 0:
                                 if eta_seconds >= 60:
                                     eta_formatted = f"{eta_seconds // 60}m {eta_seconds % 60}s"
