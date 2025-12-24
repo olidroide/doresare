@@ -1,19 +1,33 @@
 import os
-from typing import Optional
 
 from domain.models import VideoAnalysis
-from services import audio_extractor, chord_detector, video_renderer
+from services import audio_extractor, video_renderer
+from services.bitwave_adapter import BitwaveAdapter
+from services.chord_analyzer import ChordAnalyzer
 from services.file_manager import FileManager
 from services.font_manager import FontManager
 from services.youtube_downloader import YouTubeDownloader
+
+# Initialize Bitwave services (Singleton-like)
+_bitwave_adapter = None
+_chord_analyzer = None
+
+
+def get_bitwave_services():
+    global _bitwave_adapter, _chord_analyzer
+    if _bitwave_adapter is None:
+        _bitwave_adapter = BitwaveAdapter()
+    if _chord_analyzer is None:
+        _chord_analyzer = ChordAnalyzer()
+    return _bitwave_adapter, _chord_analyzer
 
 
 def generate_video(
     input_source: str,
     file_manager: FileManager,
+    font_manager: FontManager,
     progress=None,
     cleanup: bool = True,
-    font_manager: FontManager = None,
 ) -> str:
     """
     Orchestrates the video generation process using the VideoAnalysis aggregate.
@@ -37,6 +51,7 @@ def generate_video(
 
     # Create unique work directory for this pipeline run
     import time
+
     unique_id = int(time.time())
     work_dir = os.path.join(file_manager.base_dir, f"process_{unique_id}")
     file_manager.ensure_directory(work_dir)
@@ -51,6 +66,7 @@ def generate_video(
             progress(0.05, desc="Downloading YouTube video...")
 
         try:
+
             def download_progress(pct, detail):
                 """Wrapper for download progress"""
                 if progress:
@@ -83,8 +99,12 @@ def generate_video(
     analysis = VideoAnalysis(input_path=input_file)
 
     # Generate Output Path in the work directory
-    output_filename = file_manager.create_unique_filename(prefix="video", extension="mp4")
-    analysis.output_path = file_manager.get_output_path(output_filename, directory=work_dir)
+    output_filename = file_manager.create_unique_filename(
+        prefix="video", extension="mp4"
+    )
+    analysis.output_path = file_manager.get_output_path(
+        output_filename, directory=work_dir
+    )
 
     print(f"🎬 Processing: {analysis.input_path}")
     print(f"📁 Work directory: {work_dir}")
@@ -102,10 +122,13 @@ def generate_video(
 
         # Use FileManager to create a temp path for audio
         audio_path = file_manager.get_output_path(
-            file_manager.create_unique_filename("extracted_audio", "wav"), directory=work_dir
+            file_manager.create_unique_filename("extracted_audio", "wav"),
+            directory=work_dir,
         )
 
-        audio_file = audio_extractor.extract_audio_from_video(analysis.input_path, output_path=audio_path)
+        audio_file = audio_extractor.extract_audio_from_video(
+            analysis.input_path, output_path=audio_path
+        )
 
         if not audio_file:
             msg = "❌ Failed to extract audio"
@@ -114,104 +137,64 @@ def generate_video(
 
         intermediate_files.append(audio_file)
 
-        # 1.5 Audio separation (Optional but recommended)
-        skip_separation = os.getenv("SKIP_AUDIO_SEPARATION", "false").lower() == "true"
-        separation_timeout = int(os.getenv("AUDIO_SEPARATION_TIMEOUT", "300"))
-
-        if not skip_separation:
-            print("🧠 Separating audio (Vocals/Instrumental)...")
-            if progress:
-                progress(0.2, desc="Separating audio with AI...")
-
-            # Start separation in background with a shared state
-            import threading
-
-            separation_result = {"stem_file": None, "done": False}
-            shared_progress = {"pct": 0.0, "detail": ""}
-
-            def sep_progress_callback(pct, detail=""):
-                shared_progress["pct"] = pct
-                if detail:
-                    shared_progress["detail"] = detail
-
-            def run_separation():
-                try:
-                    stem_file = audio_extractor.separate_audio_ai(
-                        audio_file,
-                        output_dir=work_dir,
-                        progress_callback=sep_progress_callback,
-                        timeout_seconds=separation_timeout,
-                    )
-                    separation_result["stem_file"] = stem_file
-                except Exception as e:
-                    print(f"❌ Exception in separation thread: {e}")
-                    separation_result["stem_file"] = None
-                finally:
-                    separation_result["done"] = True
-
-            sep_thread = threading.Thread(target=run_separation, daemon=True)
-            sep_thread.start()
-
-            elapsed = 0
-            poll_interval = 0.5
-            max_wait = separation_timeout
-            last_log_time = 0
-
-            while not separation_result["done"] and elapsed < max_wait:
-                import time
-
-                time.sleep(poll_interval)
-                elapsed += poll_interval
-
-                if elapsed - last_log_time >= 10:
-                    print(f"⏳ Audio separation in progress... {elapsed:.1f}s elapsed", flush=True)
-                    last_log_time = elapsed
-
-                current_sep_progress = shared_progress["pct"]
-                detail_str = shared_progress["detail"]
-
-                if progress:
-                    pipeline_progress = 0.2 + (current_sep_progress * 0.2)
-                    pipeline_progress = min(0.39, pipeline_progress)
-                    pct_display = int(current_sep_progress * 100)
-                    
-                    # Format a professional status string for SSE
-                    status_base = "Separating audio with AI"
-                    if detail_str:
-                         desc_str = f"{status_base} | {detail_str}"
-                    else:
-                         desc_str = f"{status_base} ({pct_display}%)"
-                         
-                    progress(pipeline_progress, desc=desc_str)
-
-            sep_thread.join(timeout=1)
-
-            stem_file = separation_result["stem_file"]
-
-            if stem_file:
-                print(f"✅ Using separated stem: {stem_file}", flush=True)
-                intermediate_files.append(stem_file)
-                if "Instrumental" in stem_file:
-                    vocals_file = stem_file.replace("Instrumental", "Vocals")
-                    if os.path.exists(vocals_file):
-                        intermediate_files.append(vocals_file)
-                analysis.set_audio(stem_file)
-            else:
-                print("⚠️ Using original audio (separation failed or timed out)")
-                analysis.set_audio(audio_file)
-        else:
-            print("⚠️ Audio separation skipped (SKIP_AUDIO_SEPARATION=true)")
-            analysis.set_audio(audio_file)
-
-        # 2. Detect chords
-        print(f"🎸 Detecting chords...")
+        # 2. Bitwave Stem Separation & Chord Detection
+        print("🧠 Separating audio with Bitwave (Bass/Other/Vocals/Drums)...")
         if progress:
-            progress(0.4, desc=f"Detecting chords...")
+            progress(0.2, desc="Separating audio with Bitwave AI...")
 
-        if not analysis.audio_path:
-            raise Exception("Audio path missing in analysis")
+        import asyncio
+        import threading
 
-        chords = chord_detector.detect_chords_chroma_improved(analysis.audio_path)
+        bitwave_adapter, chord_analyzer = get_bitwave_services()
+
+        bitwave_result = {"stems": None, "sr": None, "done": False, "error": None}
+
+        def run_bitwave():
+            try:
+                # Create a new event loop for this thread to handle async Bitwave call
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                stems, sr = loop.run_until_complete(
+                    bitwave_adapter.separate_audio(audio_file)
+                )
+                bitwave_result["stems"] = stems
+                bitwave_result["sr"] = sr
+            except Exception as e:
+                print(f"❌ Exception in Bitwave thread: {e}")
+                bitwave_result["error"] = e
+            finally:
+                bitwave_result["done"] = True
+
+        bitwave_thread = threading.Thread(target=run_bitwave, daemon=True)
+        bitwave_thread.start()
+
+        # Wait for completion with progress updates
+        elapsed = 0
+        while not bitwave_result["done"]:
+            import time
+
+            time.sleep(0.5)
+            elapsed += 0.5
+            if progress:
+                # Fake progress for now as Bitwave might not provide it easily
+                p = 0.2 + min(0.19, elapsed / 60 * 0.2)
+                progress(
+                    p, desc=f"Separating audio with Bitwave AI... ({elapsed:.1f}s)"
+                )
+
+        bitwave_thread.join()
+
+        if bitwave_result["error"]:
+            raise bitwave_result["error"]
+
+        stems = bitwave_result["stems"]
+        sr = bitwave_result["sr"]
+
+        print("🎸 Detecting chords from stems...")
+        if progress:
+            progress(0.4, desc="Detecting chords from stems...")
+
+        chords = chord_analyzer.detect_chords_from_stems(stems, sr=sr)
 
         if not chords:
             msg = "⚠️ No chords detected."
@@ -219,7 +202,10 @@ def generate_video(
             raise Exception(msg)
 
         analysis.set_chords(chords)
-        print(f"✅ Detected {len(analysis.chords)} chords.")
+        print(f"✅ Detected {len(analysis.chords)} chords using Bitwave.")
+
+        # Set audio path for rendering
+        analysis.set_audio(audio_file)
 
         # 3. Generate video
         print("🎥 Generating video with overlays...")
@@ -269,5 +255,6 @@ def generate_video(
 
             cleanup_thread = threading.Thread(target=delayed_cleanup, daemon=True)
             cleanup_thread.start()
-            print(f"🕐 Scheduled cleanup for work directory: {work_dir} (in 10 seconds)")
-
+            print(
+                f"🕐 Scheduled cleanup for work directory: {work_dir} (in 10 seconds)"
+            )

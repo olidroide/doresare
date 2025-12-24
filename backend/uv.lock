@@ -115,6 +115,15 @@ wheels = [
 ]
 
 [[package]]
+name = "bitwave"
+version = "1.0.0"
+source = { git = "https://github.com/makalin/Bitwave.git#00cd0b8bda93f23ba541ac268baaf7e7f578d256" }
+dependencies = [
+    { name = "numpy" },
+    { name = "soundfile" },
+]
+
+[[package]]
 name = "brotli"
 version = "1.2.0"
 source = { registry = "https://pypi.org/simple" }
@@ -399,6 +408,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "audio-separator" },
+    { name = "bitwave" },
     { name = "certifi" },
     { name = "fastapi" },
     { name = "gradio" },
@@ -425,6 +435,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "audio-separator", specifier = ">=0.18.0" },
+    { name = "bitwave", git = "https://github.com/makalin/Bitwave.git" },
     { name = "certifi", specifier = ">=2025.11.12" },
     { name = "fastapi", specifier = ">=0.100.0" },
     { name = "gradio", specifier = ">=4.0.0" },
