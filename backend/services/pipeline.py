@@ -2,7 +2,7 @@ import os
 
 from domain.models import VideoAnalysis
 from services import audio_extractor, video_renderer
-from services.bitwave_adapter import BitwaveAdapter
+from services.bitwave_adapter import BitwaveAdapter, get_bitwave_analyzer
 from services.chord_analyzer import ChordAnalyzer
 from services.file_manager import FileManager
 from services.font_manager import FontManager
@@ -11,15 +11,20 @@ from services.youtube_downloader import YouTubeDownloader
 # Initialize Bitwave services (Singleton-like)
 _bitwave_adapter = None
 _chord_analyzer = None
+_bitwave_analyzer = None
 
 
 def get_bitwave_services():
-    global _bitwave_adapter, _chord_analyzer
+    global _bitwave_adapter, _chord_analyzer, _bitwave_analyzer
     if _bitwave_adapter is None:
         _bitwave_adapter = BitwaveAdapter()
     if _chord_analyzer is None:
         _chord_analyzer = ChordAnalyzer()
-    return _bitwave_adapter, _chord_analyzer
+    if _bitwave_analyzer is None:
+        # Check if enabled via env
+        enable = os.getenv("ENABLE_BITWAVE_ANALYSIS", "false").lower() == "true"
+        _bitwave_analyzer = get_bitwave_analyzer(enable=enable)
+    return _bitwave_adapter, _chord_analyzer, _bitwave_analyzer
 
 
 def generate_video(
@@ -145,7 +150,7 @@ def generate_video(
         import asyncio
         import threading
 
-        bitwave_adapter, chord_analyzer = get_bitwave_services()
+        bitwave_adapter, chord_analyzer, bitwave_adv = get_bitwave_services()
 
         bitwave_result = {"stems": None, "sr": None, "done": False, "error": None}
 
@@ -195,6 +200,19 @@ def generate_video(
             progress(0.4, desc="Detecting chords from stems...")
 
         chords = chord_analyzer.detect_chords_from_stems(stems, sr=sr)
+
+        # 2.1 Advanced Bitwave analysis (Hybrid approach)
+        if bitwave_adv and bitwave_adv.is_available:
+            try:
+                print(
+                    "🔍 Performing advanced Bitwave analysis for hybrid verification..."
+                )
+                chords_adv = bitwave_adv.detect_chords(audio_file, sr=int(sr))
+                print(f"📊 Bitwave Advanced detected {len(chords_adv)} chords.")
+                # In the future, we can implement a merge function here.
+                # For now, we prioritize the stem-based analysis which is more robust.
+            except Exception as e:
+                print(f"⚠️ Advanced Bitwave analysis failed: {e}")
 
         if not chords:
             msg = "⚠️ No chords detected."

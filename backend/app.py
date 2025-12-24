@@ -10,11 +10,14 @@ sys.stdout.reconfigure(line_buffering=True)
 
 from interface.gradio_ui import create_app
 from services import audio_extractor
+from services.bitwave_adapter import get_bitwave_analyzer
 from services.font_manager import FontManager
+
 
 def check_connectivity():
     """Diagnostic check for network connectivity, specifically for YouTube."""
     import socket
+
     target = "www.youtube.com"
     print(f"🌐 Connectivity check: Resolving '{target}'...")
     try:
@@ -28,8 +31,10 @@ def check_connectivity():
         print(f"❌ Connectivity Error: {e}")
         return False
 
+
 # Initialize services
 font_manager = FontManager()
+bitwave_analyzer = None
 
 # Run startup checks to ensure environment is ready
 print("🚀 Initializing backend services...")
@@ -38,30 +43,39 @@ try:
     font_manager.check_resources()
     audio_extractor.check_resources()
     # Detect deployment environment via `ENV`.
-    deploy_env = os.getenv('ENV', 'LOCAL').upper()
+    deploy_env = os.getenv("ENV", "LOCAL").upper()
     print(f"🔎 Deployment environment: '{deploy_env}'")
 
-    if deploy_env == 'HF':
+    if deploy_env == "HF":
         # Hugging Face: prefer high-quality model (Inst_Main), 16GB RAM is enough.
-        print("ℹ️ HF preset: prefer high-quality Inst_Main model for rock/acoustic chords.")
-        os.environ.setdefault('AUDIO_SEPARATOR_MODEL', 'UVR-MDX-NET-Inst_Main.onnx')
-        os.environ.setdefault('SKIP_AUDIO_SEPARATION', 'false')
-        # On HF we usually don't want to preload if resources are tight
-        
-    elif deploy_env == 'INTEL_LOW_SERVER':
+        print(
+            "ℹ️ HF preset: prefer high-quality Inst_Main model for rock/acoustic chords."
+        )
+        os.environ.setdefault("AUDIO_SEPARATOR_MODEL", "UVR-MDX-NET-Inst_Main.onnx")
+        os.environ.setdefault("SKIP_AUDIO_SEPARATION", "false")
+        # Enable Bitwave on HF
+        os.environ.setdefault("ENABLE_BITWAVE_ANALYSIS", "true")
+        bitwave_analyzer = get_bitwave_analyzer(model_size="small", enable=True)
+
+    elif deploy_env == "INTEL_LOW_SERVER":
         # Intel low-end server: enable OpenVINO, preload model and allow GPU usage
-        print("🖥️ INTEL_LOW_SERVER preset: enabling OpenVINO, preferring iGPU, preloading models.")
+        print(
+            "🖥️ INTEL_LOW_SERVER preset: enabling OpenVINO, preferring iGPU, preloading models."
+        )
         # Inform audio_extractor and downstream libs
-        os.environ.setdefault('USE_OPENVINO', 'true')
+        os.environ.setdefault("USE_OPENVINO", "true")
         # Request OpenVINO provider for ONNX Runtime (fallback to CPU provider is fine)
-        os.environ.setdefault('ONNXRUNTIME_EXECUTION_PROVIDERS', 'OpenVINOExecutionProvider,CPUExecutionProvider')
-        os.environ.setdefault('SKIP_AUDIO_SEPARATION', 'false')
-        os.environ.setdefault('AUDIO_SEPARATOR_MODEL', 'UVR_MDXNET_KARA_2.onnx')
-        
+        os.environ.setdefault(
+            "ONNXRUNTIME_EXECUTION_PROVIDERS",
+            "OpenVINOExecutionProvider,CPUExecutionProvider",
+        )
+        os.environ.setdefault("SKIP_AUDIO_SEPARATION", "false")
+        os.environ.setdefault("AUDIO_SEPARATOR_MODEL", "UVR_MDXNET_KARA_2.onnx")
+
         # Video rendering presets for Intel J3455
-        os.environ.setdefault('MOVIEPY_USE_GPU', 'true')
-        os.environ.setdefault('MOVIEPY_FFMPEG_CODEC', 'h264_qsv')
-        
+        os.environ.setdefault("MOVIEPY_USE_GPU", "true")
+        os.environ.setdefault("MOVIEPY_FFMPEG_CODEC", "h264_qsv")
+
         # Try to preload heavy model at startup to speed per-request inference
         try:
             audio_extractor.load_global_model()
