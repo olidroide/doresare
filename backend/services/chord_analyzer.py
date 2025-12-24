@@ -52,9 +52,9 @@ class ChordAnalyzer:
         # Compute RMS to detect silence
         # We combine bass and harmony to get a better sense of "musical" energy
         combined_audio = bass_audio + harmony_audio
-        rms = librosa.feature.rms(
-            y=combined_audio, hop_length=self.config.hop_length
-        )[0]
+        rms = librosa.feature.rms(y=combined_audio, hop_length=self.config.hop_length)[
+            0
+        ]
         rms = scipy.ndimage.median_filter(rms, size=self.config.chroma_median_filter)
 
         # Compute chroma for harmony (templates)
@@ -204,11 +204,11 @@ class ChordAnalyzer:
             confidence_pct = (
                 float(np.median(segment_vals) * 100.0) if segment_vals else 0.0
             )
-            
+
             # Apply time shift (negative value moves chords earlier)
             final_start = max(0.0, start_time + self.config.time_shift_seconds)
             final_end = max(0.0, end_time + self.config.time_shift_seconds)
-            
+
             detected.append(
                 DetectedChord(
                     symbol=current_symbol,
