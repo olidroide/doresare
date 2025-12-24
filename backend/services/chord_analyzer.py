@@ -15,11 +15,13 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class ChordDetectionConfig:
     hop_length: int = 2048
-    chroma_median_filter: int = 9
+    chroma_median_filter: int = 7
     bass_root_median_filter: int = 15
     min_confidence: float = 0.6
-    min_duration_seconds: float = 0.5
+    min_duration_seconds: float = 0.2
     root_lock_threshold: float = 0.55
+    rms_threshold: float = 0.01
+    time_shift_seconds: float = -0.3
 
 
 class ChordAnalyzer:
@@ -47,6 +49,14 @@ class ChordAnalyzer:
             logger.error("Missing required stems (bass/other)")
             return []
 
+        # Compute RMS to detect silence
+        # We combine bass and harmony to get a better sense of "musical" energy
+        combined_audio = bass_audio + harmony_audio
+        rms = librosa.feature.rms(
+            y=combined_audio, hop_length=self.config.hop_length
+        )[0]
+        rms = scipy.ndimage.median_filter(rms, size=self.config.chroma_median_filter)
+
         # Compute chroma for harmony (templates)
         harmony_chroma = self._compute_chroma(harmony_audio, sr=analysis_sr)
 
@@ -66,6 +76,12 @@ class ChordAnalyzer:
             similarity, root_notes, root_strength
         )
 
+        # Apply RMS threshold: if energy is too low, it's not a chord
+        # We set confidence to 0 for these frames
+        for t in range(len(best_val)):
+            if rms[t] < self.config.rms_threshold:
+                best_val[t] = 0.0
+
         # Convert to temporal events
         times = librosa.frames_to_time(
             np.arange(similarity.shape[1]),
@@ -79,10 +95,21 @@ class ChordAnalyzer:
     ) -> List[DetectedChord]:
         """Detect chords from a single audio track (no stems)."""
         analysis_sr = float(sr)
+
+        # Compute RMS for silence detection
+        rms = librosa.feature.rms(y=audio, hop_length=self.config.hop_length)[0]
+        rms = scipy.ndimage.median_filter(rms, size=self.config.chroma_median_filter)
+
         chroma = self._compute_chroma(audio, sr=analysis_sr)
         similarity = self._template_mat @ chroma
         best_idx = np.argmax(similarity, axis=0)
         best_val = np.max(similarity, axis=0)
+
+        # Apply RMS threshold
+        for t in range(len(best_val)):
+            if rms[t] < self.config.rms_threshold:
+                best_val[t] = 0.0
+
         times = librosa.frames_to_time(
             np.arange(similarity.shape[1]),
             sr=analysis_sr,
@@ -177,11 +204,16 @@ class ChordAnalyzer:
             confidence_pct = (
                 float(np.median(segment_vals) * 100.0) if segment_vals else 0.0
             )
+            
+            # Apply time shift (negative value moves chords earlier)
+            final_start = max(0.0, start_time + self.config.time_shift_seconds)
+            final_end = max(0.0, end_time + self.config.time_shift_seconds)
+            
             detected.append(
                 DetectedChord(
                     symbol=current_symbol,
-                    start=start_time,
-                    end=end_time,
+                    start=final_start,
+                    end=final_end,
                     notes=[],
                     percentage=confidence_pct,
                 )
@@ -210,4 +242,28 @@ class ChordAnalyzer:
         else:
             last_end = float(times[-1] + (self.config.hop_length / float(self.sr)))
         close_segment(last_end)
-        return detected
+
+        # Post-process: Merge consecutive identical chords
+        if not detected:
+            return []
+
+        merged: List[DetectedChord] = []
+        for chord in detected:
+            if not merged:
+                merged.append(chord)
+                continue
+
+            if merged[-1].symbol == chord.symbol:
+                prev = merged[-1]
+                # Merge by extending end time and averaging confidence
+                merged[-1] = DetectedChord(
+                    symbol=prev.symbol,
+                    start=prev.start,
+                    end=chord.end,
+                    notes=prev.notes,
+                    percentage=(prev.percentage + chord.percentage) / 2.0,
+                )
+            else:
+                merged.append(chord)
+
+        return merged
